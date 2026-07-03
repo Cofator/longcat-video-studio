@@ -9,7 +9,7 @@ const DEFAULT_SETTINGS: Settings = {
   vastApiKey: process.env.VAST_API_KEY ?? "",
   workerUrl: process.env.WORKER_URL ?? "",
   workerToken: process.env.WORKER_TOKEN ?? "",
-  studioRepo: "https://github.com/spagnoloadm/longcat-video-studio.git",
+  studioRepo: "https://github.com/Cofator/longcat-video-studio.git",
 };
 
 async function ensureDir() {

@@ -41,7 +41,7 @@ if [ ! -f /workspace/weights/LongCat-Video/.download_complete ]; then
 fi
 
 # ---- 3. Worker (this project) ----------------------------------------------
-STUDIO_REPO="${STUDIO_REPO:-https://github.com/spagnoloadm/longcat-video-studio.git}"
+STUDIO_REPO="${STUDIO_REPO:-https://github.com/Cofator/longcat-video-studio.git}"
 if [ ! -d /workspace/longcat-video-studio ]; then
   git clone "$STUDIO_REPO" /workspace/longcat-video-studio
 fi
