@@ -1,0 +1,31 @@
+# dependencies
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# builds
+.next/
+out/
+dist/
+build/
+
+# runtime data (jobs, settings, generated videos)
+frontend/data/
+worker/outputs/
+worker/uploads/
+*.mp4
+
+# env / secrets
+.env
+.env.local
+.env*.local
+
+# local tooling
+.claude/
+
+# misc
+.DS_Store
+Thumbs.db
+*.log

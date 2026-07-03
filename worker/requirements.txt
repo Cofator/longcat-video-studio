@@ -1,0 +1,5 @@
+# Worker HTTP server deps (model deps come from LongCat-Video/requirements.txt)
+fastapi>=0.111
+uvicorn[standard]>=0.30
+pydantic>=2.7
+pillow>=10.0
