@@ -1,6 +1,9 @@
 import type { VastInstance, VastOffer } from "./types";
 
-const VAST_API = "https://console.vast.ai/api/v0";
+// Instância base da API. Cada rota inclui a versão (`/v0/...` ou `/v1/...`):
+// busca (bundles) e criação (asks) permanecem em v0; gestão de instâncias
+// migrou para v1 (v0 responde 410 deprecated_endpoint).
+const VAST_API = "https://console.vast.ai/api";
 
 export class VastError extends Error {
   status: number;
@@ -65,7 +68,7 @@ export async function searchOffers(apiKey: string, f: OfferFilters): Promise<Vas
   if (f.minGpuRam) query.gpu_ram = { gte: f.minGpuRam };
   if (f.maxPrice) query.dph_total = { lte: f.maxPrice };
 
-  const data = await vastFetch(apiKey, "POST", "/bundles/", query);
+  const data = await vastFetch(apiKey, "POST", "/v0/bundles/", query);
   return (data?.offers ?? []) as VastOffer[];
 }
 
@@ -101,7 +104,7 @@ export async function createInstance(
 
   // Body aligned with the documented REST payload for PUT /asks/{id}/.
   // (No `client_id` — that's a CLI-only field and triggers `invalid_args` here.)
-  return vastFetch(apiKey, "PUT", `/asks/${offerId}/`, {
+  return vastFetch(apiKey, "PUT", `/v0/asks/${offerId}/`, {
     image: DEFAULT_IMAGE,
     disk: opts.disk ?? 100,
     label: WORKER_LABEL,
@@ -113,8 +116,12 @@ export async function createInstance(
 }
 
 export async function listInstances(apiKey: string): Promise<VastInstance[]> {
-  const data = await vastFetch(apiKey, "GET", "/instances/?owner=me");
-  return (data?.instances ?? []) as VastInstance[];
+  const data = await vastFetch(apiKey, "GET", "/v1/instances");
+  // v1 pode retornar {instances:[...]}, um array direto ou {results:[...]}.
+  const list = Array.isArray(data)
+    ? data
+    : data?.instances ?? data?.results ?? [];
+  return list as VastInstance[];
 }
 
 export async function setInstanceState(
@@ -122,11 +129,12 @@ export async function setInstanceState(
   id: number,
   state: "running" | "stopped"
 ): Promise<any> {
-  return vastFetch(apiKey, "PUT", `/instances/${id}/`, { state });
+  const action = state === "running" ? "start" : "stop";
+  return vastFetch(apiKey, "PUT", `/v1/instances/${id}/${action}`);
 }
 
 export async function destroyInstance(apiKey: string, id: number): Promise<any> {
-  return vastFetch(apiKey, "DELETE", `/instances/${id}/`);
+  return vastFetch(apiKey, "DELETE", `/v1/instances/${id}`);
 }
 
 /** Resolve the public URL of the worker from a Vast.ai instance's port map. */
