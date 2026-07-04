@@ -1,5 +1,11 @@
-export type JobType = "t2v" | "i2v" | "long";
+export type JobType = "t2v" | "i2v" | "long" | "avatar-single" | "avatar-multi";
 export type RefineMode = "none" | "spatial" | "spatiotemporal";
+
+export interface AudioInput {
+  name: string; // person1, person2, ...
+  data_b64: string;
+  bbox?: number[]; // [y_min, x_min, y_max, x_max] — multi-áudio
+}
 
 export interface Settings {
   vastApiKey: string;
@@ -23,6 +29,16 @@ export interface JobParams {
   refine_steps?: number;
   use_distill?: boolean;
   image_b64?: string;
+  // avatar
+  audios?: AudioInput[];
+  stage_1?: "ai2v" | "at2v";
+  resolution?: "480p" | "720p";
+  ref_img_index?: number;
+  mask_frame_range?: number;
+  text_guidance_scale?: number;
+  audio_guidance_scale?: number;
+  use_int8?: boolean;
+  audio_type?: "para" | "add";
 }
 
 export interface WorkerJob {
@@ -47,6 +63,9 @@ export interface WorkerJob {
     num_inference_steps: number;
     guidance_scale: number;
     seed?: number | null;
+    resolution?: string;
+    stage_1?: string;
+    num_speakers?: number;
   };
 }
 
@@ -56,6 +75,8 @@ export interface WorkerHealth {
   model_loading: boolean;
   load_error?: string | null;
   distill_available: boolean;
+  avatar_supported?: boolean;
+  avatar_ready?: boolean;
   queue_size: number;
   running_job?: string | null;
   jobs_total: number;

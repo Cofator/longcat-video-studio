@@ -15,6 +15,8 @@ const TYPE_LABEL: Record<string, string> = {
   t2v: "Texto → Vídeo",
   i2v: "Imagem → Vídeo",
   long: "Vídeo longo",
+  "avatar-single": "Avatar · 1 voz",
+  "avatar-multi": "Avatar · multi-voz",
 };
 
 export function estimateSeconds(job: WorkerJob): number {

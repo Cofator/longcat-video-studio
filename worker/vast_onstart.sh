@@ -27,6 +27,13 @@ fi
 cd /workspace/LongCat-Video
 pip install -r requirements.txt
 
+# Avatar (audio-driven) deps — best effort; pesos são baixados sob demanda no
+# primeiro job de avatar pelo worker.
+if [ -f requirements_avatar.txt ]; then
+  pip install -r requirements_avatar.txt || echo "WARN: requirements_avatar failed"
+fi
+pip install librosa soundfile "audio-separator[cpu]" onnxruntime || echo "WARN: avatar audio deps failed"
+
 # FlashAttention-2 (best effort — the pipeline can fall back to SDPA/xformers)
 pip install ninja psutil packaging
 pip install flash-attn --no-build-isolation || echo "WARN: flash-attn install failed, continuing"

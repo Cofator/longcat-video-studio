@@ -26,6 +26,7 @@ import base64
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -46,6 +47,12 @@ from pydantic import BaseModel, Field
 
 LONGCAT_REPO = os.environ.get("LONGCAT_REPO", "/workspace/LongCat-Video")
 CHECKPOINT_DIR = os.environ.get("CHECKPOINT_DIR", "/workspace/weights/LongCat-Video")
+# Avatar (audio-driven) — pesos baixados sob demanda no primeiro job de avatar.
+AVATAR_CHECKPOINT_DIR = os.environ.get(
+    "AVATAR_CHECKPOINT_DIR", "/workspace/weights/LongCat-Video-Avatar-1.5"
+)
+AVATAR_MODEL_TYPE = os.environ.get("AVATAR_MODEL_TYPE", "avatar-v1.5")
+AVATAR_REPO_ID = os.environ.get("AVATAR_REPO_ID", "meituan-longcat/LongCat-Video-Avatar-1.5")
 WORKER_TOKEN = os.environ.get("WORKER_TOKEN", "")
 OUTPUT_DIR = Path(os.environ.get("OUTPUT_DIR", "outputs")).absolute()
 UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR", "uploads")).absolute()
@@ -69,8 +76,14 @@ DEFAULT_NEGATIVE_PROMPT = (
 # ---------------------------------------------------------------------------
 
 
+class AudioInput(BaseModel):
+    name: str = "person1"           # rótulo do falante (person1, person2, ...)
+    data_b64: str                   # wav/mp3 em base64 (com ou sem prefixo data:)
+    bbox: Optional[list[int]] = None  # [y_min, x_min, y_max, x_max] — só multi-áudio
+
+
 class JobParams(BaseModel):
-    type: str = Field(..., description="t2v | i2v | long")
+    type: str = Field(..., description="t2v | i2v | long | avatar-single | avatar-multi")
     prompt: str = ""
     negative_prompt: str = DEFAULT_NEGATIVE_PROMPT
     # base generation
@@ -89,6 +102,16 @@ class JobParams(BaseModel):
     use_distill: bool = False
     # i2v / long-from-image
     image_b64: Optional[str] = None
+    # ---- avatar (audio-driven) -------------------------------------------
+    audios: Optional[list[AudioInput]] = None
+    stage_1: str = "ai2v"          # ai2v (a partir da imagem) | at2v (do zero) — single
+    resolution: str = "480p"       # 480p | 720p
+    ref_img_index: int = 10
+    mask_frame_range: int = 3
+    text_guidance_scale: float = 4.0
+    audio_guidance_scale: float = 4.0
+    use_int8: bool = True          # reduz VRAM (recomendado em GPUs de 48 GB)
+    audio_type: str = "para"       # multi: para (paralelo) | add (sequencial)
 
 
 class Job:
@@ -129,6 +152,9 @@ class Job:
                 "num_inference_steps": self.params.num_inference_steps,
                 "guidance_scale": self.params.guidance_scale,
                 "seed": self.params.seed,
+                "resolution": self.params.resolution,
+                "stage_1": self.params.stage_1,
+                "num_speakers": len(self.params.audios or []),
             },
         }
         return d
@@ -385,6 +411,182 @@ def run_job(job: Job):
     job.total_frames = len(all_frames)
 
 
+# ---------------------------------------------------------------------------
+# Avatar (audio-driven) — roda os scripts oficiais via torchrun
+# ---------------------------------------------------------------------------
+
+AVATAR_LOCK = threading.Lock()
+_avatar_ready = {"deps": False, "weights": False}
+
+
+def _run_stream(cmd: list[str], cwd: str, on_line, env=None) -> int:
+    """Roda um subprocesso transmitindo stdout linha a linha para on_line()."""
+    proc = subprocess.Popen(
+        cmd,
+        cwd=cwd,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    )
+    assert proc.stdout is not None
+    for line in proc.stdout:
+        line = line.rstrip()
+        if line:
+            on_line(line)
+    proc.wait()
+    return proc.returncode
+
+
+def ensure_avatar_ready(report):
+    """Instala deps de avatar e baixa os pesos v1.5 (uma vez)."""
+    with AVATAR_LOCK:
+        if not _avatar_ready["deps"]:
+            report("Instalando dependências de avatar (librosa, audio-separator)...")
+            req = os.path.join(LONGCAT_REPO, "requirements_avatar.txt")
+            if os.path.exists(req):
+                subprocess.run([sys.executable, "-m", "pip", "install", "-r", req], check=False)
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install",
+                 "librosa", "soundfile", "audio-separator[cpu]", "onnxruntime"],
+                check=False,
+            )
+            _avatar_ready["deps"] = True
+
+        flag = Path(AVATAR_CHECKPOINT_DIR) / ".download_complete"
+        if not flag.exists():
+            report("Baixando pesos do avatar (LongCat-Video-Avatar-1.5, alguns GB)...")
+            rc = _run_stream(
+                ["huggingface-cli", "download", AVATAR_REPO_ID,
+                 "--local-dir", AVATAR_CHECKPOINT_DIR],
+                cwd=LONGCAT_REPO,
+                on_line=lambda l: report(f"download: {l[-80:]}"),
+            )
+            if rc != 0:
+                raise RuntimeError("Falha ao baixar os pesos do avatar (huggingface-cli).")
+            flag.touch()
+        _avatar_ready["weights"] = True
+
+
+def _save_b64(data_b64: str, path: Path):
+    raw = data_b64.split(",", 1)[1] if data_b64.startswith("data:") else data_b64
+    path.write_bytes(base64.b64decode(raw))
+
+
+def run_avatar_job(job: Job):
+    """Gera vídeo de avatar (single ou multi áudio) via script oficial."""
+    p = job.params
+
+    def report(stage: str, progress: float):
+        job.stage = stage
+        job.progress = max(job.progress, min(progress, 0.999))
+        print(f"[job {job.id}] {progress:.0%} {stage}")
+
+    ensure_avatar_ready(lambda msg: report(msg, max(job.progress, 0.02)))
+
+    work = UPLOAD_DIR / job.id
+    work.mkdir(parents=True, exist_ok=True)
+    out_dir = work / "out"
+    out_dir.mkdir(exist_ok=True)
+
+    audios = p.audios or []
+    if not audios:
+        raise ValueError("Nenhum áudio enviado para o avatar.")
+
+    # imagem de referência (obrigatória para ai2v e para multi)
+    image_path = None
+    if p.image_b64:
+        image_path = work / "ref.png"
+        img = _decode_image(p.image_b64)
+        img.save(image_path)
+
+    is_multi = p.type == "avatar-multi"
+
+    # salva áudios e monta cond_audio
+    cond_audio: dict[str, str] = {}
+    bbox: dict[str, object] = {}
+    for idx, a in enumerate(audios):
+        name = a.name or f"person{idx + 1}"
+        ext = ".wav"
+        if a.data_b64.startswith("data:audio/mpeg") or a.data_b64.startswith("data:audio/mp3"):
+            ext = ".mp3"
+        ap = work / f"{name}{ext}"
+        _save_b64(a.data_b64, ap)
+        cond_audio[name] = str(ap)
+        if is_multi and a.bbox and len(a.bbox) == 4:
+            bbox[name] = a.bbox
+
+    input_json = {"prompt": p.prompt, "cond_audio": cond_audio}
+    if image_path:
+        input_json["cond_image"] = str(image_path)
+    if is_multi:
+        input_json["audio_type"] = p.audio_type
+        if bbox:
+            input_json["bbox"] = bbox
+
+    json_path = work / "input.json"
+    json_path.write_text(json.dumps(input_json, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    script = (
+        "run_demo_avatar_multi_audio_to_video.py"
+        if is_multi
+        else "run_demo_avatar_single_audio_to_video.py"
+    )
+    cmd = [
+        "torchrun", "--nproc_per_node=1", "--master_port=29555", script,
+        "--context_parallel_size=1",
+        f"--checkpoint_dir={AVATAR_CHECKPOINT_DIR}",
+        "--model_type", AVATAR_MODEL_TYPE,
+        "--use_distill",
+        "--input_json", str(json_path),
+        "--output_dir", str(out_dir),
+        "--resolution", p.resolution,
+        "--num_segments", str(max(p.num_segments, 1)),
+        "--num_inference_steps", str(p.num_inference_steps),
+        "--ref_img_index", str(p.ref_img_index),
+        "--mask_frame_range", str(p.mask_frame_range),
+        "--text_guidance_scale", str(p.text_guidance_scale),
+        "--audio_guidance_scale", str(p.audio_guidance_scale),
+    ]
+    if p.use_int8:
+        cmd.append("--use_int8")
+    if not is_multi:
+        # ai2v exige imagem; se não houver, cai para at2v (do zero)
+        stage = p.stage_1 if (p.stage_1 == "at2v" or image_path) else "at2v"
+        cmd += ["--stage_1", stage]
+
+    report("Gerando avatar (lip-sync)... isso pode levar vários minutos.", max(job.progress, 0.1))
+
+    total_units = 1 + max(p.num_segments, 0)
+    seen = {"n": 0}
+
+    def on_line(line: str):
+        low = line.lower()
+        if "continue" in low or "segment" in low or "demo_1" in low:
+            seen["n"] = min(seen["n"] + 1, total_units)
+        prog = 0.1 + 0.85 * (seen["n"] / max(total_units, 1))
+        job.stage = line[-100:]
+        job.progress = max(job.progress, min(prog, 0.95))
+
+    env = dict(os.environ)
+    env.setdefault("PYTHONPATH", LONGCAT_REPO)
+    rc = _run_stream(cmd, cwd=LONGCAT_REPO, on_line=on_line, env=env)
+    if rc != 0:
+        raise RuntimeError(f"Script de avatar terminou com código {rc}. Veja o log acima.")
+
+    # localiza o(s) mp4 gerado(s); pega o mais recente (vídeo final completo)
+    mp4s = sorted(out_dir.rglob("*.mp4"), key=lambda f: f.stat().st_mtime)
+    if not mp4s:
+        raise RuntimeError("O script de avatar não produziu nenhum arquivo .mp4.")
+    report("Finalizando...", 0.98)
+    final = OUTPUT_DIR / f"{job.id}.mp4"
+    shutil.copyfile(mp4s[-1], final)
+    job.output_path = final
+    job.fps = 25 if AVATAR_MODEL_TYPE == "avatar-v1.5" else 16
+    print(f"[job {job.id}] avatar produziu {len(mp4s)} mp4(s); usando {mp4s[-1].name}")
+
+
 def worker_loop():
     while True:
         QUEUE_EVENT.wait()
@@ -399,7 +601,10 @@ def worker_loop():
         job.status = "running"
         job.started_at = time.time()
         try:
-            run_job(job)
+            if job.params.type in ("avatar-single", "avatar-multi"):
+                run_avatar_job(job)
+            else:
+                run_job(job)
             job.status = "completed"
             job.stage = "Concluído"
             job.progress = 1.0
@@ -477,6 +682,8 @@ def health():
         "load_error": (RUNTIME.load_error or "")[-1000:] or None,
         "distill_available": RUNTIME.distill_available,
         "checkpoint_dir": CHECKPOINT_DIR,
+        "avatar_supported": True,
+        "avatar_ready": _avatar_ready["weights"],
         "queue_size": len(JOB_QUEUE),
         "running_job": running[0].id if running else None,
         "jobs_total": len(JOBS),
@@ -486,14 +693,31 @@ def health():
 
 @app.post("/jobs", dependencies=[Depends(check_auth)])
 def create_job(params: JobParams):
-    if params.type not in ("t2v", "i2v", "long"):
-        raise HTTPException(400, "type must be t2v, i2v or long")
-    if params.type == "i2v" and not params.image_b64:
-        raise HTTPException(400, "i2v requires image_b64")
-    if not params.prompt.strip() and params.type != "i2v":
-        raise HTTPException(400, "prompt is required")
-    if params.num_frames < 16 or params.num_frames > 200:
-        raise HTTPException(400, "num_frames must be between 16 and 200")
+    valid = ("t2v", "i2v", "long", "avatar-single", "avatar-multi")
+    if params.type not in valid:
+        raise HTTPException(400, f"type must be one of {valid}")
+
+    if params.type.startswith("avatar-"):
+        audios = params.audios or []
+        if not audios:
+            raise HTTPException(400, "avatar requires at least one audio")
+        if params.type == "avatar-single" and len(audios) != 1:
+            raise HTTPException(400, "avatar-single requires exactly one audio")
+        if params.type == "avatar-multi" and len(audios) < 2:
+            raise HTTPException(400, "avatar-multi requires at least two audios")
+        if params.type == "avatar-multi" and not params.image_b64:
+            raise HTTPException(400, "avatar-multi requires a reference image")
+        if params.stage_1 == "ai2v" and not params.image_b64 and params.type == "avatar-single":
+            raise HTTPException(400, "stage_1=ai2v requires a reference image (or use at2v)")
+        if any(not a.data_b64 for a in audios):
+            raise HTTPException(400, "every audio must include data_b64")
+    else:
+        if params.type == "i2v" and not params.image_b64:
+            raise HTTPException(400, "i2v requires image_b64")
+        if not params.prompt.strip() and params.type != "i2v":
+            raise HTTPException(400, "prompt is required")
+        if params.num_frames < 16 or params.num_frames > 200:
+            raise HTTPException(400, "num_frames must be between 16 and 200")
     if params.num_segments < 0 or params.num_segments > 60:
         raise HTTPException(400, "num_segments must be between 0 and 60")
 

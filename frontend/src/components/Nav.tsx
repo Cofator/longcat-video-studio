@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 const LINKS = [
   { href: "/", label: "Início", icon: "🏠" },
   { href: "/generate", label: "Gerar vídeo", icon: "🎬" },
+  { href: "/avatar", label: "Avatar (áudio)", icon: "🗣️" },
   { href: "/jobs", label: "Meus vídeos", icon: "📼" },
   { href: "/gpus", label: "GPUs (Vast.ai)", icon: "🖥️" },
   { href: "/settings", label: "Configurações", icon: "⚙️" },

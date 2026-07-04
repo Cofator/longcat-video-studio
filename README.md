@@ -4,7 +4,7 @@ Interface web completa para gerar **vídeos longos (minutos)** com o modelo open
 [LongCat-Video (13,6B)](https://huggingface.co/meituan-longcat/LongCat-Video) da Meituan,
 com **processamento remoto em GPUs da [Vast.ai](https://vast.ai)**.
 
-> Text-to-Video · Image-to-Video · Vídeo longo por continuação de segmentos · Refinamento 720p/30fps
+> Text-to-Video · Image-to-Video · Vídeo longo por continuação de segmentos · Refinamento 720p/30fps · **Avatar (áudio → pessoa falando, single e multi-voz)**
 
 ## Arquitetura
 
@@ -68,6 +68,16 @@ Na aba **Gerar vídeo**:
   dar um prompt por segmento para dirigir a narrativa.
 - **Qualidade**: 480p rápido, 720p (refino espacial) ou 720p 30fps (refino espaço-temporal).
 - **Turbo**: LoRA de destilação (16 passos) quando disponível no checkpoint.
+
+Na aba **Avatar (áudio)** — pessoa falando com lip-sync (modelo `LongCat-Video-Avatar-1.5`):
+
+- **Single (uma voz)**: envie um áudio + (opcional) imagem de referência do rosto. Modo
+  `ai2v` (a partir da imagem) ou `at2v` (gera a pessoa do zero).
+- **Multi (conversa)**: imagem com os falantes + um áudio por falante, com bounding box
+  opcional de cada rosto (`y_min,x_min,y_max,x_max`) e modo `para` (falam em paralelo) ou
+  `add` (sequencial).
+- O áudio é sincronizado e **muxado no MP4 final** automaticamente. No primeiro uso, a GPU
+  baixa os pesos do avatar (alguns GB) sob demanda. Marque **INT8** em GPUs de 48 GB.
 
 Acompanhe em **Meus vídeos** (progresso por etapa) e baixe o MP4 ao final.
 
