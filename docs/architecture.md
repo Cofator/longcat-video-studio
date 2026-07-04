@@ -42,6 +42,17 @@ Estratégia do LongCat-Video reproduzida no worker (`run_job`):
 
 Progresso é reportado por unidades de trabalho (base + segmentos + janelas de refino).
 
+## Melhorar prompt (LLM)
+
+A rota `/api/enhance-prompt` (server-side) expande a ideia do usuário em prompt
+cinematográfico e gera roteiro por segmento. O mesmo SDK `@anthropic-ai/sdk` atende os
+dois provedores — só mudam `baseURL` e `model` (`src/lib/anthropic.ts`):
+
+| Provedor | baseURL | Modelo |
+|---|---|---|
+| Claude | padrão (api.anthropic.com) | `claude-opus-4-8` |
+| LongCat | `https://api.longcat.chat/anthropic` | `LongCat-2.0` |
+
 ## Segurança
 
 - `WORKER_TOKEN`: bearer token exigido pelo worker (exceto `/health`). É injetado na instância

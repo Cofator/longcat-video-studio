@@ -9,8 +9,11 @@ interface SettingsView {
   workerTokenMasked: string;
   hasWorkerToken: boolean;
   studioRepo: string;
+  llmProvider: "claude" | "longcat";
   anthropicApiKeyMasked: string;
   hasAnthropicApiKey: boolean;
+  longcatApiKeyMasked: string;
+  hasLongcatApiKey: boolean;
 }
 
 export default function SettingsPage() {
@@ -20,6 +23,8 @@ export default function SettingsPage() {
   const [workerToken, setWorkerToken] = useState("");
   const [studioRepo, setStudioRepo] = useState("");
   const [anthropicApiKey, setAnthropicApiKey] = useState("");
+  const [longcatApiKey, setLongcatApiKey] = useState("");
+  const [llmProvider, setLlmProvider] = useState<"claude" | "longcat">("claude");
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [testResult, setTestResult] = useState("");
@@ -29,6 +34,7 @@ export default function SettingsPage() {
     setView(data);
     setWorkerUrl(data.workerUrl);
     setStudioRepo(data.studioRepo);
+    setLlmProvider(data.llmProvider ?? "claude");
   };
 
   useEffect(() => {
@@ -39,10 +45,11 @@ export default function SettingsPage() {
     setError("");
     setSaved(false);
     try {
-      const patch: Record<string, string> = { workerUrl, studioRepo };
+      const patch: Record<string, string> = { workerUrl, studioRepo, llmProvider };
       if (vastApiKey.trim()) patch.vastApiKey = vastApiKey.trim();
       if (workerToken.trim()) patch.workerToken = workerToken.trim();
       if (anthropicApiKey.trim()) patch.anthropicApiKey = anthropicApiKey.trim();
+      if (longcatApiKey.trim()) patch.longcatApiKey = longcatApiKey.trim();
       const res = await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -52,6 +59,7 @@ export default function SettingsPage() {
       setVastApiKey("");
       setWorkerToken("");
       setAnthropicApiKey("");
+      setLongcatApiKey("");
       setSaved(true);
       load();
     } catch (err: any) {
@@ -147,27 +155,69 @@ export default function SettingsPage() {
       </div>
 
       <div className="card">
-        <h3>Claude (melhorar prompt)</h3>
-        <label className="field">
-          <span className="lbl">
-            Chave da API do Claude{" "}
-            {view?.hasAnthropicApiKey && <span className="dim">(atual: {view.anthropicApiKeyMasked})</span>}
-          </span>
-          <input
-            type="password"
-            value={anthropicApiKey}
-            onChange={(e) => setAnthropicApiKey(e.target.value)}
-            placeholder={view?.hasAnthropicApiKey ? "•••• (deixe vazio para manter)" : "cole sua chave da Anthropic (sk-ant-...)"}
-          />
-          <div className="hint">
-            Habilita o botão <b>✨ Melhorar prompt</b> nas telas de geração (expande/traduz sua ideia
-            para um prompt cinematográfico e gera roteiro por segmento). Chave em{" "}
-            <a href="https://console.anthropic.com/settings/keys" target="_blank" style={{ textDecoration: "underline" }}>
-              console.anthropic.com
-            </a>
-            .
-          </div>
-        </label>
+        <h3>Melhorar prompt (LLM)</h3>
+        <div className="tabs">
+          <button
+            type="button"
+            className={`tab ${llmProvider === "claude" ? "active" : ""}`}
+            onClick={() => setLlmProvider("claude")}
+          >
+            Claude (Anthropic)
+          </button>
+          <button
+            type="button"
+            className={`tab ${llmProvider === "longcat" ? "active" : ""}`}
+            onClick={() => setLlmProvider("longcat")}
+          >
+            LongCat-2.0 (Meituan)
+          </button>
+        </div>
+        {llmProvider === "claude" && (
+          <label className="field">
+            <span className="lbl">
+              Chave da API do Claude{" "}
+              {view?.hasAnthropicApiKey && <span className="dim">(atual: {view.anthropicApiKeyMasked})</span>}
+            </span>
+            <input
+              type="password"
+              value={anthropicApiKey}
+              onChange={(e) => setAnthropicApiKey(e.target.value)}
+              placeholder={view?.hasAnthropicApiKey ? "•••• (deixe vazio para manter)" : "cole sua chave da Anthropic (sk-ant-...)"}
+            />
+            <div className="hint">
+              Chave em{" "}
+              <a href="https://console.anthropic.com/settings/keys" target="_blank" style={{ textDecoration: "underline" }}>
+                console.anthropic.com
+              </a>
+              .
+            </div>
+          </label>
+        )}
+        {llmProvider === "longcat" && (
+          <label className="field">
+            <span className="lbl">
+              Chave da API LongCat{" "}
+              {view?.hasLongcatApiKey && <span className="dim">(atual: {view.longcatApiKeyMasked})</span>}
+            </span>
+            <input
+              type="password"
+              value={longcatApiKey}
+              onChange={(e) => setLongcatApiKey(e.target.value)}
+              placeholder={view?.hasLongcatApiKey ? "•••• (deixe vazio para manter)" : "cole sua chave da LongCat"}
+            />
+            <div className="hint">
+              Obtenha em{" "}
+              <a href="https://longcat.chat/platform" target="_blank" style={{ textDecoration: "underline" }}>
+                longcat.chat/platform
+              </a>{" "}
+              (a API da LongCat é compatível com a da Anthropic). Modelo usado: LongCat-2.0.
+            </div>
+          </label>
+        )}
+        <div className="hint">
+          O botão <b>✨ Melhorar prompt</b> nas telas de geração usa o provedor selecionado para
+          expandir/traduzir sua ideia em um prompt cinematográfico.
+        </div>
       </div>
 
       <div className="row" style={{ marginTop: 18 }}>

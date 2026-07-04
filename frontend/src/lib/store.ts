@@ -10,7 +10,9 @@ const DEFAULT_SETTINGS: Settings = {
   workerUrl: process.env.WORKER_URL ?? "",
   workerToken: process.env.WORKER_TOKEN ?? "",
   studioRepo: "https://github.com/Cofator/longcat-video-studio.git",
+  llmProvider: (process.env.LLM_PROVIDER as "claude" | "longcat") ?? "claude",
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
+  longcatApiKey: process.env.LONGCAT_API_KEY ?? "",
 };
 
 async function ensureDir() {

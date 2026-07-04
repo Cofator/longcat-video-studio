@@ -18,17 +18,30 @@ export async function GET() {
     workerTokenMasked: mask(s.workerToken),
     hasWorkerToken: Boolean(s.workerToken),
     studioRepo: s.studioRepo,
+    llmProvider: s.llmProvider,
     anthropicApiKeyMasked: mask(s.anthropicApiKey),
     hasAnthropicApiKey: Boolean(s.anthropicApiKey),
+    longcatApiKeyMasked: mask(s.longcatApiKey),
+    hasLongcatApiKey: Boolean(s.longcatApiKey),
   });
 }
 
 export async function PUT(req: Request) {
   const body = await req.json();
   const patch: Record<string, string> = {};
-  for (const key of ["vastApiKey", "workerUrl", "workerToken", "studioRepo", "anthropicApiKey"] as const) {
+  for (const key of [
+    "vastApiKey",
+    "workerUrl",
+    "workerToken",
+    "studioRepo",
+    "anthropicApiKey",
+    "longcatApiKey",
+  ] as const) {
     if (typeof body[key] === "string") patch[key] = body[key].trim();
   }
-  await saveSettings(patch);
+  if (body.llmProvider === "claude" || body.llmProvider === "longcat") {
+    patch.llmProvider = body.llmProvider;
+  }
+  await saveSettings(patch as any);
   return NextResponse.json({ ok: true });
 }

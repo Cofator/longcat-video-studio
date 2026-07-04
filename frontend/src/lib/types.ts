@@ -12,7 +12,9 @@ export interface Settings {
   workerUrl: string; // ex.: http://IP:PORTA — se vazio, detectado via Vast.ai
   workerToken: string;
   studioRepo: string; // repo git clonado pela instância (worker)
-  anthropicApiKey: string; // usado no "Melhorar prompt" (Claude)
+  llmProvider: "claude" | "longcat"; // provedor do "Melhorar prompt"
+  anthropicApiKey: string; // chave do Claude
+  longcatApiKey: string; // chave da LongCat LLM (api.longcat.chat)
 }
 
 export interface JobParams {

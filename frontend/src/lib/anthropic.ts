@@ -1,12 +1,35 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getSettings } from "./store";
 
-export const ENHANCE_MODEL = "claude-opus-4-8";
+// A API da LongCat é compatível com a da Anthropic (endpoint /anthropic),
+// então o mesmo SDK atende os dois provedores — muda só baseURL e modelo.
+const LONGCAT_BASE_URL = "https://api.longcat.chat/anthropic";
+const CLAUDE_MODEL = "claude-opus-4-8";
+const LONGCAT_MODEL = "LongCat-2.0"; // modelo mais novo/capaz da Meituan
 
-export async function getAnthropic(): Promise<Anthropic | null> {
-  const settings = await getSettings();
-  if (!settings.anthropicApiKey) return null;
-  return new Anthropic({ apiKey: settings.anthropicApiKey });
+export interface LLM {
+  client: Anthropic;
+  model: string;
+  provider: "claude" | "longcat";
+}
+
+/** Monta o cliente do provedor de LLM configurado (Claude ou LongCat). */
+export async function getLLM(): Promise<LLM | null> {
+  const s = await getSettings();
+  if (s.llmProvider === "longcat") {
+    if (!s.longcatApiKey) return null;
+    return {
+      client: new Anthropic({ apiKey: s.longcatApiKey, baseURL: LONGCAT_BASE_URL }),
+      model: LONGCAT_MODEL,
+      provider: "longcat",
+    };
+  }
+  if (!s.anthropicApiKey) return null;
+  return {
+    client: new Anthropic({ apiKey: s.anthropicApiKey }),
+    model: CLAUDE_MODEL,
+    provider: "claude",
+  };
 }
 
 const SYSTEM = `Você é um diretor de fotografia especialista em prompts para o modelo de geração de vídeo LongCat-Video.
@@ -32,9 +55,9 @@ function textOf(res: Anthropic.Message): string {
 }
 
 /** Expande/traduz a ideia do usuário em um prompt cinematográfico (inglês). */
-export async function enhancePrompt(client: Anthropic, idea: string): Promise<string> {
-  const res = await client.messages.create({
-    model: ENHANCE_MODEL,
+export async function enhancePrompt(llm: LLM, idea: string): Promise<string> {
+  const res = await llm.client.messages.create({
+    model: llm.model,
     max_tokens: 1024,
     system: SYSTEM,
     messages: [{ role: "user", content: idea }],
@@ -43,13 +66,9 @@ export async function enhancePrompt(client: Anthropic, idea: string): Promise<st
 }
 
 /** Gera N prompts por segmento para vídeo longo (narrativa contínua). */
-export async function generateSegments(
-  client: Anthropic,
-  idea: string,
-  n: number
-): Promise<string[]> {
-  const res = await client.messages.create({
-    model: ENHANCE_MODEL,
+export async function generateSegments(llm: LLM, idea: string, n: number): Promise<string[]> {
+  const res = await llm.client.messages.create({
+    model: llm.model,
     max_tokens: 2048,
     system: SYSTEM_SEGMENTS,
     messages: [

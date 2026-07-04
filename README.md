@@ -81,6 +81,24 @@ Na aba **Avatar (áudio)** — pessoa falando com lip-sync (modelo `LongCat-Vide
 
 Acompanhe em **Meus vídeos** (progresso por etapa) e baixe o MP4 ao final.
 
+## Melhorar prompt com IA (Claude ou LongCat-2.0)
+
+Nas telas **Gerar vídeo** e **Avatar**, o botão **✨ Melhorar prompt** usa um LLM para
+transformar sua ideia (em português) num prompt cinematográfico em inglês — que o
+LongCat-Video entende muito melhor. Em **Vídeo longo**, ele também gera automaticamente
+os prompts por segmento (roteiro da cena contínua).
+
+Escolha o provedor em **Configurações → Melhorar prompt (LLM)**:
+
+- **Claude (Anthropic)** — modelo `claude-opus-4-8`, via SDK oficial `@anthropic-ai/sdk`
+  (chave em [console.anthropic.com](https://console.anthropic.com/settings/keys));
+- **LongCat-2.0 (Meituan)** — via endpoint compatível com Anthropic
+  (`https://api.longcat.chat/anthropic`), modelo `LongCat-2.0`
+  (chave em [longcat.chat/platform](https://longcat.chat/platform)).
+
+A chamada roda apenas no servidor Next (rota `/api/enhance-prompt`); as chaves ficam em
+`frontend/data/settings.json` (fora do git) ou nas variáveis de ambiente.
+
 > 💸 **Custo**: você paga a Vast.ai por hora de GPU. Instâncias **paradas ainda cobram
 > armazenamento** — destrua o que não estiver usando (aba GPUs).
 

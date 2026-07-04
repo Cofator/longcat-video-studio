@@ -43,6 +43,7 @@ export default function AvatarPage() {
   const [maskRange, setMaskRange] = useState(3);
   const [useInt8, setUseInt8] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [enhancing, setEnhancing] = useState(false);
   const [error, setError] = useState("");
 
   const needsImage = mode === "multi" || (mode === "single" && stage1 === "ai2v");
@@ -60,6 +61,29 @@ export default function AvatarPage() {
   const onSpeakerAudio = async (i: number, file: File | null) => {
     if (!file) return;
     setSpeaker(i, { file, b64: await fileToB64(file) });
+  };
+
+  const enhance = async () => {
+    setError("");
+    if (!prompt.trim()) {
+      setError("Escreva uma ideia antes de melhorar o prompt.");
+      return;
+    }
+    setEnhancing(true);
+    try {
+      const res = await fetch("/api/enhance-prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idea: prompt.trim(), segments: 0 }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Falha ao melhorar o prompt");
+      if (data.prompt) setPrompt(data.prompt);
+    } catch (err: any) {
+      setError(String(err?.message ?? err));
+    } finally {
+      setEnhancing(false);
+    }
   };
 
   const submit = async () => {
@@ -147,7 +171,18 @@ export default function AvatarPage() {
 
       <div className="card">
         <label className="field">
-          <span className="lbl">Descrição da cena (prompt)</span>
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <span className="lbl">Descrição da cena (prompt)</span>
+            <button
+              type="button"
+              className="btn secondary small"
+              onClick={enhance}
+              disabled={enhancing}
+              title="Usa o LLM configurado (Claude ou LongCat) para expandir/traduzir sua ideia"
+            >
+              {enhancing ? "Melhorando…" : "✨ Melhorar prompt"}
+            </button>
+          </div>
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
