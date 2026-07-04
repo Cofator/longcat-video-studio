@@ -42,6 +42,15 @@ export async function workerFetch(
       signal: controller.signal,
       cache: "no-store",
     });
+  } catch (err: any) {
+    // fetch lança em timeout/conexão recusada — worker provavelmente ainda
+    // provisionando (baixando o modelo) ou reiniciando.
+    const reason = err?.name === "AbortError" ? "tempo esgotado" : "sem resposta";
+    throw new Error(
+      `Worker ainda não está acessível (${reason}) em ${worker.url}. ` +
+        `A instância pode estar provisionando o modelo (10–30 min no 1º boot). ` +
+        `Aguarde o indicador da barra lateral ficar verde e tente de novo.`
+    );
   } finally {
     clearTimeout(timeout);
   }
