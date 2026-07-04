@@ -137,12 +137,20 @@ export async function destroyInstance(apiKey: string, id: number): Promise<any> 
   return vastFetch(apiKey, "DELETE", `/v1/instances/${id}`);
 }
 
-/** Resolve the public URL of the worker from a Vast.ai instance's port map. */
+/**
+ * Resolve the public URL of the worker from a Vast.ai instance's port map.
+ * The `ports` map only populates once the instance finishes loading; while
+ * provisioning it is null and this returns null (worker not reachable yet).
+ */
 export function workerUrlFromInstance(inst: VastInstance): string | null {
   const ip = inst.public_ipaddr?.trim();
-  if (!ip) return null;
-  const mapping = inst.ports?.[`${WORKER_PORT}/tcp`];
-  const hostPort = mapping?.[0]?.HostPort;
+  const ports = inst.ports as Record<string, { HostIp?: string; HostPort?: string }[]> | undefined;
+  if (!ip || !ports) return null;
+  // Procura a chave da porta do worker em qualquer formato ("8000/tcp", "8000").
+  const key =
+    Object.keys(ports).find((k) => k === `${WORKER_PORT}/tcp`) ??
+    Object.keys(ports).find((k) => k.split("/")[0] === String(WORKER_PORT));
+  const hostPort = key ? ports[key]?.[0]?.HostPort : undefined;
   if (!hostPort) return null;
   return `http://${ip}:${hostPort}`;
 }

@@ -11,6 +11,27 @@ const GPU_PRESETS: { label: string; names: string[]; minRam?: number }[] = [
   { label: "Qualquer (≥24 GB — pode faltar VRAM)", names: [], minRam: 24000 },
 ];
 
+const isStopped = (s?: string) =>
+  ["stopped", "exited", "offline"].includes((s ?? "").toLowerCase());
+
+function STATUS_UI(s?: string): { label: string; cls: string } {
+  switch ((s ?? "").toLowerCase()) {
+    case "running":
+      return { label: "rodando", cls: "completed" };
+    case "loading":
+      return { label: "provisionando…", cls: "running" };
+    case "created":
+    case "scheduling":
+      return { label: "iniciando…", cls: "queued" };
+    case "stopped":
+    case "exited":
+    case "offline":
+      return { label: "parada", cls: "canceled" };
+    default:
+      return { label: s ?? "—", cls: "queued" };
+  }
+}
+
 export default function GpusPage() {
   const [instances, setInstances] = useState<(VastInstance & { workerUrl?: string | null })[] | null>(null);
   const [offers, setOffers] = useState<VastOffer[] | null>(null);
@@ -144,15 +165,17 @@ export default function GpusPage() {
                     <td className="mono">{i.id}{i.label === "longcat-video-studio" ? " ⭐" : ""}</td>
                     <td>{i.num_gpus && i.num_gpus > 1 ? `${i.num_gpus}× ` : ""}{i.gpu_name ?? "—"}</td>
                     <td>
-                      <span className={`badge ${i.actual_status === "running" ? "completed" : "queued"}`}>
-                        {i.actual_status ?? i.cur_state ?? "—"}
+                      <span className={`badge ${STATUS_UI(i.actual_status).cls}`}>
+                        {STATUS_UI(i.actual_status).label}
                       </span>
                     </td>
                     <td>{i.dph_total ? `$${i.dph_total.toFixed(3)}` : "—"}</td>
-                    <td className="mono" style={{ fontSize: 12 }}>{i.workerUrl ?? "—"}</td>
+                    <td className="mono" style={{ fontSize: 12 }}>
+                      {i.workerUrl ?? (isStopped(i.actual_status) ? "—" : <span className="dim">aguardando boot…</span>)}
+                    </td>
                     <td>
                       <div className="row" style={{ gap: 6 }}>
-                        {i.actual_status === "running" ? (
+                        {!isStopped(i.actual_status) ? (
                           <button className="btn secondary small" disabled={busy === `inst-${i.id}`} onClick={() => act(i.id, "stopped")}>
                             ⏸ Parar
                           </button>
