@@ -47,6 +47,33 @@ export default function GeneratePage() {
     reader.readAsDataURL(file);
   };
 
+  const [enhancing, setEnhancing] = useState(false);
+  const enhance = async () => {
+    setError("");
+    if (!prompt.trim()) {
+      setError("Escreva uma ideia antes de melhorar o prompt.");
+      return;
+    }
+    setEnhancing(true);
+    try {
+      const res = await fetch("/api/enhance-prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idea: prompt.trim(), segments: isLong ? numSegments : 0 }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Falha ao melhorar o prompt");
+      if (data.prompt) setPrompt(data.prompt);
+      if (Array.isArray(data.segmentPrompts) && data.segmentPrompts.length) {
+        setSegmentPrompts(data.segmentPrompts.join("\n"));
+      }
+    } catch (err: any) {
+      setError(String(err?.message ?? err));
+    } finally {
+      setEnhancing(false);
+    }
+  };
+
   const submit = async () => {
     setError("");
     if (!prompt.trim() && type !== "i2v") {
@@ -120,12 +147,27 @@ export default function GeneratePage() {
 
       <div className="card">
         <label className="field">
-          <span className="lbl">Prompt {type === "i2v" ? "(opcional)" : ""}</span>
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <span className="lbl">Prompt {type === "i2v" ? "(opcional)" : ""}</span>
+            <button
+              type="button"
+              className="btn secondary small"
+              onClick={enhance}
+              disabled={enhancing}
+              title="Usa o Claude para expandir/traduzir sua ideia (requer chave em Configurações)"
+            >
+              {enhancing ? "Melhorando…" : "✨ Melhorar prompt"}
+            </button>
+          </div>
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             placeholder="Ex.: Um gato laranja caminha por um telhado ao pôr do sol, câmera acompanhando em travelling suave, luz dourada, estilo cinematográfico"
           />
+          <div className="hint">
+            Escreva a ideia em português e clique em ✨ para o Claude transformar num prompt
+            cinematográfico {isLong ? "e gerar o roteiro por segmento" : "detalhado"}.
+          </div>
         </label>
 
         {(type === "i2v" || type === "long") && (

@@ -18,13 +18,15 @@ export async function GET() {
     workerTokenMasked: mask(s.workerToken),
     hasWorkerToken: Boolean(s.workerToken),
     studioRepo: s.studioRepo,
+    anthropicApiKeyMasked: mask(s.anthropicApiKey),
+    hasAnthropicApiKey: Boolean(s.anthropicApiKey),
   });
 }
 
 export async function PUT(req: Request) {
   const body = await req.json();
   const patch: Record<string, string> = {};
-  for (const key of ["vastApiKey", "workerUrl", "workerToken", "studioRepo"] as const) {
+  for (const key of ["vastApiKey", "workerUrl", "workerToken", "studioRepo", "anthropicApiKey"] as const) {
     if (typeof body[key] === "string") patch[key] = body[key].trim();
   }
   await saveSettings(patch);

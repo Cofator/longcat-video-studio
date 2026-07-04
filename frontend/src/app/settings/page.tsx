@@ -9,6 +9,8 @@ interface SettingsView {
   workerTokenMasked: string;
   hasWorkerToken: boolean;
   studioRepo: string;
+  anthropicApiKeyMasked: string;
+  hasAnthropicApiKey: boolean;
 }
 
 export default function SettingsPage() {
@@ -17,6 +19,7 @@ export default function SettingsPage() {
   const [workerUrl, setWorkerUrl] = useState("");
   const [workerToken, setWorkerToken] = useState("");
   const [studioRepo, setStudioRepo] = useState("");
+  const [anthropicApiKey, setAnthropicApiKey] = useState("");
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [testResult, setTestResult] = useState("");
@@ -39,6 +42,7 @@ export default function SettingsPage() {
       const patch: Record<string, string> = { workerUrl, studioRepo };
       if (vastApiKey.trim()) patch.vastApiKey = vastApiKey.trim();
       if (workerToken.trim()) patch.workerToken = workerToken.trim();
+      if (anthropicApiKey.trim()) patch.anthropicApiKey = anthropicApiKey.trim();
       const res = await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -47,6 +51,7 @@ export default function SettingsPage() {
       if (!res.ok) throw new Error("Falha ao salvar");
       setVastApiKey("");
       setWorkerToken("");
+      setAnthropicApiKey("");
       setSaved(true);
       load();
     } catch (err: any) {
@@ -138,6 +143,30 @@ export default function SettingsPage() {
         <label className="field">
           <span className="lbl">Repositório do projeto (clonado pela instância)</span>
           <input type="text" value={studioRepo} onChange={(e) => setStudioRepo(e.target.value)} />
+        </label>
+      </div>
+
+      <div className="card">
+        <h3>Claude (melhorar prompt)</h3>
+        <label className="field">
+          <span className="lbl">
+            Chave da API do Claude{" "}
+            {view?.hasAnthropicApiKey && <span className="dim">(atual: {view.anthropicApiKeyMasked})</span>}
+          </span>
+          <input
+            type="password"
+            value={anthropicApiKey}
+            onChange={(e) => setAnthropicApiKey(e.target.value)}
+            placeholder={view?.hasAnthropicApiKey ? "•••• (deixe vazio para manter)" : "cole sua chave da Anthropic (sk-ant-...)"}
+          />
+          <div className="hint">
+            Habilita o botão <b>✨ Melhorar prompt</b> nas telas de geração (expande/traduz sua ideia
+            para um prompt cinematográfico e gera roteiro por segmento). Chave em{" "}
+            <a href="https://console.anthropic.com/settings/keys" target="_blank" style={{ textDecoration: "underline" }}>
+              console.anthropic.com
+            </a>
+            .
+          </div>
         </label>
       </div>
 
