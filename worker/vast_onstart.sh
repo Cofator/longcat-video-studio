@@ -34,9 +34,16 @@ if [ -f requirements_avatar.txt ]; then
 fi
 pip install librosa soundfile "audio-separator[cpu]" onnxruntime || echo "WARN: avatar audio deps failed"
 
-# FlashAttention-2 (best effort — the pipeline can fall back to SDPA/xformers)
-pip install ninja psutil packaging
-pip install flash-attn --no-build-isolation || echo "WARN: flash-attn install failed, continuing"
+# FlashAttention-2 — OPCIONAL. A compilação da fonte (--no-build-isolation)
+# leva 20-40 min e não é necessária: o modelo cai para SDPA/xformers.
+# Só instala se INSTALL_FLASH_ATTN=1 for definido (usa wheel pré-compilado se houver).
+if [ "${INSTALL_FLASH_ATTN:-0}" = "1" ]; then
+  pip install ninja psutil packaging
+  pip install flash-attn || echo "WARN: flash-attn install failed, continuing (usa SDPA/xformers)"
+else
+  echo "flash-attn pulado (INSTALL_FLASH_ATTN!=1) — usando SDPA/xformers"
+  pip install xformers || echo "WARN: xformers install failed"
+fi
 
 # ---- 2. Model weights -------------------------------------------------------
 pip install -U "huggingface_hub[cli]"
