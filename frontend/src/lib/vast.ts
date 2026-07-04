@@ -33,9 +33,12 @@ async function vastFetch(
   } catch {
     data = { raw: text };
   }
-  if (!res.ok) {
-    const msg = data?.error ?? data?.msg ?? data?.detail ?? text ?? res.statusText;
-    throw new VastError(res.status, `Vast.ai ${res.status}: ${String(msg).slice(0, 500)}`);
+  // Vast frequentemente responde 200 com {success:false, error, msg}.
+  const failed = !res.ok || data?.success === false;
+  if (failed) {
+    const parts = [data?.error, data?.msg, data?.detail].filter(Boolean);
+    const msg = parts.length ? parts.join(" — ") : text || res.statusText;
+    throw new VastError(res.status, `Vast.ai ${res.status}: ${String(msg).slice(0, 800)}`);
   }
   return data;
 }
@@ -88,14 +91,24 @@ export async function createInstance(
   offerId: number,
   opts: { studioRepo: string; workerToken: string; disk?: number }
 ): Promise<{ new_contract: number }> {
+  const env = [
+    `-p ${WORKER_PORT}:${WORKER_PORT}`,
+    opts.workerToken ? `-e WORKER_TOKEN=${opts.workerToken}` : "",
+    `-e OPEN_BUTTON_PORT=${WORKER_PORT}`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  // Body aligned with the documented REST payload for PUT /asks/{id}/.
+  // (No `client_id` — that's a CLI-only field and triggers `invalid_args` here.)
   return vastFetch(apiKey, "PUT", `/asks/${offerId}/`, {
-    client_id: "me",
     image: DEFAULT_IMAGE,
     disk: opts.disk ?? 100,
     label: WORKER_LABEL,
-    onstart: buildOnstart(opts.studioRepo, opts.workerToken),
     runtype: "ssh",
-    env: `-p ${WORKER_PORT}:${WORKER_PORT} -e WORKER_TOKEN=${opts.workerToken} -e OPEN_BUTTON_PORT=${WORKER_PORT}`,
+    target_state: "running",
+    onstart: buildOnstart(opts.studioRepo, opts.workerToken),
+    env,
   });
 }
 
