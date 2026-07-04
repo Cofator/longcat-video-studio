@@ -94,13 +94,13 @@ export async function createInstance(
   offerId: number,
   opts: { studioRepo: string; workerToken: string; disk?: number }
 ): Promise<{ new_contract: number }> {
-  const env = [
-    `-p ${WORKER_PORT}:${WORKER_PORT}`,
-    opts.workerToken ? `-e WORKER_TOKEN=${opts.workerToken}` : "",
-    `-e OPEN_BUTTON_PORT=${WORKER_PORT}`,
-  ]
-    .filter(Boolean)
-    .join(" ");
+  // A API espera `env` como objeto: variáveis viram "CHAVE": "valor" e o
+  // mapeamento de porta vira "-p 8000:8000": "1".
+  const env: Record<string, string> = {
+    [`-p ${WORKER_PORT}:${WORKER_PORT}`]: "1",
+    OPEN_BUTTON_PORT: String(WORKER_PORT),
+  };
+  if (opts.workerToken) env.WORKER_TOKEN = opts.workerToken;
 
   // Body aligned with the documented REST payload for PUT /asks/{id}/.
   // (No `client_id` — that's a CLI-only field and triggers `invalid_args` here.)
