@@ -124,17 +124,18 @@ export async function listInstances(apiKey: string): Promise<VastInstance[]> {
   return list as VastInstance[];
 }
 
+// Nota: apenas o GET de listagem foi descontinuado na v0 (410). Iniciar/parar
+// e destruir continuam em /api/v0/instances/{id}/ (com barra final).
 export async function setInstanceState(
   apiKey: string,
   id: number,
   state: "running" | "stopped"
 ): Promise<any> {
-  const action = state === "running" ? "start" : "stop";
-  return vastFetch(apiKey, "PUT", `/v1/instances/${id}/${action}`);
+  return vastFetch(apiKey, "PUT", `/v0/instances/${id}/`, { state });
 }
 
 export async function destroyInstance(apiKey: string, id: number): Promise<any> {
-  return vastFetch(apiKey, "DELETE", `/v1/instances/${id}`);
+  return vastFetch(apiKey, "DELETE", `/v0/instances/${id}/`);
 }
 
 /**
