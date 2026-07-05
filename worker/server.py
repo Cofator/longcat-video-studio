@@ -327,9 +327,10 @@ def run_job(job: Job):
         done_units += 1
         report(stage, done_units / total_units)
 
+    # Args comuns SEM resolução: generate_t2v usa height/width; i2v e vc usam
+    # resolution="480p". (generate_t2v não aceita o kwarg `resolution`.)
     common = dict(
         negative_prompt=p.negative_prompt,
-        resolution="480p",
         num_frames=p.num_frames,
         num_inference_steps=steps,
         guidance_scale=guidance,
@@ -342,9 +343,9 @@ def run_job(job: Job):
     report("Gerando clipe base (480p)...", 0.02)
     if p.type == "i2v" or (p.type == "long" and p.image_b64):
         image = _decode_image(p.image_b64)
-        frames = pipe.generate_i2v(image=image, prompt=p.prompt, **common)[0]
+        frames = pipe.generate_i2v(image=image, prompt=p.prompt, resolution="480p", **common)[0]
     else:
-        frames = pipe.generate_t2v(prompt=p.prompt, **common)[0]
+        frames = pipe.generate_t2v(prompt=p.prompt, height=480, width=832, **common)[0]
     all_frames = list(frames)
     unit_done("Clipe base concluído")
 
@@ -358,6 +359,7 @@ def run_job(job: Job):
         out = pipe.generate_vc(
             video=cond,
             prompt=seg_prompt,
+            resolution="480p",
             num_cond_frames=p.num_cond_frames,
             use_kv_cache=True,
             offload_kv_cache=False,
