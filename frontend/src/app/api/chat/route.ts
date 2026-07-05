@@ -1,4 +1,4 @@
-import { getLLM } from "@/lib/anthropic";
+import { getLLM, streamLLM } from "@/lib/anthropic";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   const llm = await getLLM(provider);
   if (!llm) {
     return Response.json(
-      { error: "Chave da LLM não configurada. Defina em Configurações (Claude ou LongCat)." },
+      { error: "Chave da LLM não configurada. Defina em Configurações (Claude, LongCat ou OpenRouter)." },
       { status: 400 }
     );
   }
@@ -34,16 +34,8 @@ export async function POST(req: Request) {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const s = llm.client.messages.stream({
-          model: llm.model,
-          max_tokens: 4096,
-          system: SYSTEM,
-          messages,
-        });
-        for await (const event of s) {
-          if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-            controller.enqueue(encoder.encode(event.delta.text));
-          }
+        for await (const chunk of streamLLM(llm, SYSTEM, messages, 4096)) {
+          controller.enqueue(encoder.encode(chunk));
         }
       } catch (err: any) {
         const msg = err?.error?.error?.message ?? err?.message ?? String(err);

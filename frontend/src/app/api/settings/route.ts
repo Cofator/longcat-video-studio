@@ -23,6 +23,9 @@ export async function GET() {
     hasAnthropicApiKey: Boolean(s.anthropicApiKey),
     longcatApiKeyMasked: mask(s.longcatApiKey),
     hasLongcatApiKey: Boolean(s.longcatApiKey),
+    openrouterApiKeyMasked: mask(s.openrouterApiKey),
+    hasOpenrouterApiKey: Boolean(s.openrouterApiKey),
+    openrouterModel: s.openrouterModel,
   });
 }
 
@@ -36,10 +39,12 @@ export async function PUT(req: Request) {
     "studioRepo",
     "anthropicApiKey",
     "longcatApiKey",
+    "openrouterApiKey",
+    "openrouterModel",
   ] as const) {
     if (typeof body[key] === "string") patch[key] = body[key].trim();
   }
-  if (body.llmProvider === "claude" || body.llmProvider === "longcat") {
+  if (["claude", "longcat", "openrouter"].includes(body.llmProvider)) {
     patch.llmProvider = body.llmProvider;
   }
   await saveSettings(patch as any);

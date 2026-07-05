@@ -8,11 +8,12 @@ interface Msg {
   content: string;
 }
 
-type Provider = "longcat" | "claude";
+type Provider = "longcat" | "claude" | "openrouter";
 
 const PROVIDER_LABEL: Record<Provider, string> = {
   longcat: "LongCat-2.0",
   claude: "Claude",
+  openrouter: "OpenRouter",
 };
 
 /** Renderização leve de markdown: blocos de código, código inline, negrito, quebras. */
@@ -64,7 +65,7 @@ export default function ChatPage() {
     fetch("/api/settings")
       .then((r) => r.json())
       .then((s) => {
-        if (s.llmProvider === "claude" || s.llmProvider === "longcat") setProvider(s.llmProvider);
+        if (["claude", "longcat", "openrouter"].includes(s.llmProvider)) setProvider(s.llmProvider);
       })
       .catch(() => {});
   }, []);
@@ -139,7 +140,8 @@ export default function ChatPage() {
             onChange={(e) => setProvider(e.target.value as Provider)}
             style={{ width: 160 }}
           >
-            <option value="longcat">LongCat-2.0 (Meituan)</option>
+            <option value="openrouter">OpenRouter</option>
+            <option value="longcat">LongCat-2.0 (direto)</option>
             <option value="claude">Claude (Anthropic)</option>
           </select>
           <button className="btn secondary small" onClick={() => setMessages([])} disabled={busy || !messages.length}>
