@@ -209,8 +209,11 @@ class ModelRuntime:
                 scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(
                     ckpt, subfolder="scheduler"
                 )
+                # cp_split_hw=[1,1] = sem context parallelism (1 GPU). Sem esse
+                # parâmetro fica None e o forward do DiT quebra ("NoneType is
+                # not subscriptable" em self.cp_split_hw[0]).
                 dit = LongCatVideoTransformer3DModel.from_pretrained(
-                    ckpt, subfolder="dit", torch_dtype=torch.bfloat16
+                    ckpt, subfolder="dit", cp_split_hw=[1, 1], torch_dtype=torch.bfloat16
                 )
                 pipe = LongCatVideoPipeline(
                     tokenizer=tokenizer,
