@@ -13,10 +13,15 @@ export interface LLM {
   provider: "claude" | "longcat";
 }
 
-/** Monta o cliente do provedor de LLM configurado (Claude ou LongCat). */
-export async function getLLM(): Promise<LLM | null> {
+/**
+ * Monta o cliente do provedor de LLM.
+ * `override` força um provedor específico (usado pelo Chat); sem ele, usa o
+ * provedor configurado em Configurações.
+ */
+export async function getLLM(override?: "claude" | "longcat"): Promise<LLM | null> {
   const s = await getSettings();
-  if (s.llmProvider === "longcat") {
+  const provider = override ?? s.llmProvider;
+  if (provider === "longcat") {
     if (!s.longcatApiKey) return null;
     return {
       client: new Anthropic({ apiKey: s.longcatApiKey, baseURL: LONGCAT_BASE_URL }),
