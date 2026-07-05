@@ -165,8 +165,9 @@ export default function GeneratePage() {
             placeholder="Ex.: Um gato laranja caminha por um telhado ao pôr do sol, câmera acompanhando em travelling suave, luz dourada, estilo cinematográfico"
           />
           <div className="hint">
-            Escreva a ideia em português e clique em ✨ para o Claude transformar num prompt
-            cinematográfico {isLong ? "e gerar o roteiro por segmento" : "detalhado"}.
+            Escreva a ideia em português e clique em ✨ para a IA (Claude ou LongCat, definido em
+            Configurações) transformar num prompt cinematográfico{" "}
+            {isLong ? "e gerar o roteiro por segmento" : "detalhado"}.
           </div>
         </label>
 
