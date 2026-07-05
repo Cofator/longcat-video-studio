@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { VastInstance, VastOffer } from "@/lib/types";
 
 const GPU_PRESETS: { label: string; names: string[]; minRam?: number }[] = [
-  { label: "Recomendadas (≥48 GB)", names: [], minRam: 48000 },
+  { label: "Recomendadas (≥48 GB, Ampere+)", names: [], minRam: 48000 },
   { label: "H100", names: ["H100_SXM", "H100_PCIE", "H100_NVL"] },
   { label: "A100 80GB", names: ["A100_SXM4", "A100_PCIE", "A100X"], minRam: 75000 },
   { label: "L40S / A6000 (48 GB)", names: ["L40S", "L40", "RTX_A6000", "RTX_6000Ada"] },

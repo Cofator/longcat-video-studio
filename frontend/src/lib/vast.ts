@@ -62,6 +62,9 @@ export async function searchOffers(apiKey: string, f: OfferFilters): Promise<Vas
     verified: { eq: true },
     num_gpus: { eq: f.numGpus ?? 1 },
     disk_space: { gte: f.minDisk ?? 80 },
+    // compute_cap >= 800 (Ampere+): o flash-attn 2 exigido pelo LongCat NÃO roda
+    // em GPUs Turing (ex.: Quadro RTX 8000 = 750), mesmo com 48 GB de VRAM.
+    compute_cap: { gte: 800 },
     order: [["dph_total", "asc"]],
   };
   if (f.gpuNames?.length) query.gpu_name = { in: f.gpuNames };
