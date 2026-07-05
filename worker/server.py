@@ -281,9 +281,16 @@ class ModelRuntime:
     @staticmethod
     def _find_distill_lora(ckpt: str) -> Optional[str]:
         root = Path(ckpt)
+        # Caminho oficial no checkpoint HF: lora/cfg_step_lora.safetensors
+        explicit = root / "lora" / "cfg_step_lora.safetensors"
+        if explicit.exists():
+            return str(explicit)
         candidates = []
-        for pattern in ("*cfg*lora*", "*lora*cfg*", "*distill*"):
-            candidates += [p for p in root.glob(pattern) if p.is_dir() or p.suffix in (".safetensors", ".pt", ".bin")]
+        for pattern in ("lora/*", "*cfg*lora*", "*lora*cfg*", "*distill*"):
+            candidates += [
+                p for p in root.glob(pattern)
+                if "cfg" in p.name and (p.is_dir() or p.suffix in (".safetensors", ".pt", ".bin"))
+            ]
         return str(candidates[0]) if candidates else None
 
     def set_distill(self, enabled: bool):
