@@ -1,6 +1,8 @@
 # LongCat Video Studio worker image (alternative to onstart provisioning).
 # Model weights are NOT baked in — mount or download them to /workspace/weights.
-FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel
+# torch 2.6/cu12.4 nao suporta GPUs Blackwell (RTX PRO 6000, sm_120); usamos
+# 2.8/cu12.8, que cobre Blackwell e continua compativel com Ampere/Hopper.
+FROM pytorch/pytorch:2.8.0-cuda12.8-cudnn9-devel
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y git ffmpeg && rm -rf /var/lib/apt/lists/*
@@ -10,7 +12,7 @@ RUN git clone https://github.com/meituan-longcat/LongCat-Video.git /workspace/Lo
     && pip install --no-cache-dir -r /workspace/LongCat-Video/requirements.txt \
     && pip uninstall -y xformers || true \
     && pip install --no-cache-dir --force-reinstall --no-deps \
-       "https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.6cxx11abiFALSE-cp311-cp311-linux_x86_64.whl" \
+       "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3.post1/flash_attn-2.8.3.post1+cu12torch2.8cxx11abiTRUE-cp311-cp311-linux_x86_64.whl" \
     && pip install --no-cache-dir "huggingface_hub[cli]<1.0"
 
 # LTX-2.3 (Lightricks) — segundo modelo, opcional. Pesos baixados no CMD abaixo.

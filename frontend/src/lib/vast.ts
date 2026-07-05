@@ -77,7 +77,10 @@ export async function searchOffers(apiKey: string, f: OfferFilters): Promise<Vas
 
 export const WORKER_LABEL = "longcat-video-studio";
 export const WORKER_PORT = 8000;
-export const DEFAULT_IMAGE = "pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel";
+// torch 2.6/cu12.4 não suporta GPUs Blackwell (RTX PRO 6000, sm_120 — precisa
+// de torch >= 2.7 + CUDA >= 12.8). 2.8/cu12.8 cobre Blackwell e continua
+// compatível com Ampere/Hopper (CUDA runtimes mais novos são retrocompatíveis).
+export const DEFAULT_IMAGE = "pytorch/pytorch:2.8.0-cuda12.8-cudnn9-devel";
 
 export function buildOnstart(studioRepo: string, workerToken: string): string {
   // Compact onstart (Vast.ai limits its size): fetches and runs the full

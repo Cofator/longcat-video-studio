@@ -2,8 +2,10 @@
 # ============================================================================
 # LongCat Video Studio — Vast.ai provisioning script (onstart)
 #
-# Use with a PyTorch 2.6 + CUDA 12.4 image, e.g.:
-#   pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel
+# Use with a PyTorch 2.8 + CUDA 12.8 image, e.g.:
+#   pytorch/pytorch:2.8.0-cuda12.8-cudnn9-devel
+# (precisa ser >= torch 2.7 / CUDA 12.8 para suportar GPUs Blackwell, ex.
+# RTX PRO 6000 — sm_120 nao existe em torch 2.6/cu12.4)
 #
 # Configurable via environment variables (set them in the Vast.ai template
 # or in the "env" field when creating the instance):
@@ -40,7 +42,8 @@ pip install librosa soundfile "audio-separator[cpu]" onnxruntime || echo "WARN: 
 # wheel PRÉ-COMPILADO que casa com o torch/ABI instalados (rápido, sem compilar).
 # Também removemos o xformers: o diffusers o importa e bate no flash-attn quebrado.
 pip uninstall -y xformers >/dev/null 2>&1 || true
-FA_VER=2.7.4.post1
+# 2.8.3.post1: primeira release com wheels para torch 2.8 (necessario p/ Blackwell)
+FA_VER=2.8.3.post1
 PYTAG=$(python -c "import sys;print(f'cp{sys.version_info.major}{sys.version_info.minor}')")
 ABI=$(python -c "import torch;print('TRUE' if torch._C._GLIBCXX_USE_CXX11_ABI else 'FALSE')")
 TMM=$(python -c "import torch;print('.'.join(torch.__version__.split('+')[0].split('.')[:2]))")
