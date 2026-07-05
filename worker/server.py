@@ -101,6 +101,7 @@ class JobParams(BaseModel):
     # refinement (coarse-to-fine 480p -> 720p)
     refine: str = "none"           # none | spatial | spatiotemporal
     refine_steps: int = 50
+    refine_window: int = 45        # frames por janela de refino (menor = menos VRAM em 720p)
     # distillation (16-step LoRA) — used when the LoRA weights are available
     use_distill: bool = False
     # i2v / long-from-image
@@ -437,34 +438,48 @@ def run_job(job: Job):
 
         RUNTIME.set_distill(False)
         spatial_only = p.refine == "spatial"
+        base_frames = all_frames  # guarda o 480p como fallback se o refino estourar
         report("Refinando para 720p...", done_units / total_units)
-        refined: list = []
-        window = p.num_frames
+        # Janela temporal menor (múltiplo de 4 + 1) para caber na VRAM em 720p.
+        window = max(9, min(p.refine_window, p.num_frames))
+        if (window - 1) % 4 != 0:
+            window = ((window - 1) // 4) * 4 + 1
         cond_frames = p.num_cond_frames
-        start = 0
-        first = True
-        while start < len(all_frames):
-            chunk = all_frames[start : start + window]
-            if len(chunk) < cond_frames + 1 and not first:
-                break
-            kwargs = dict(
-                prompt=p.prompt,
-                stage1_video=_to_pil(chunk),
-                num_inference_steps=p.refine_steps,
-                generator=generator,
-                spatial_refine_only=spatial_only,
-            )
-            if not first and refined:
-                kwargs["video"] = _to_pil(refined[-cond_frames:])
-                kwargs["num_cond_frames"] = cond_frames
-            out = list(pipe.generate_refine(**kwargs)[0])
-            refined.extend(out if first else out[cond_frames:])
-            start += window if first else window - cond_frames
-            first = False
-            unit_done("Janela de refinamento concluída")
-        all_frames = refined
-        if not spatial_only:
-            fps = 30
+        try:
+            refined: list = []
+            start = 0
+            first = True
+            while start < len(base_frames):
+                chunk = base_frames[start : start + window]
+                if len(chunk) < cond_frames + 1 and not first:
+                    break
+                kwargs = dict(
+                    prompt=p.prompt,
+                    stage1_video=_to_pil(chunk),
+                    num_inference_steps=p.refine_steps,
+                    generator=generator,
+                    spatial_refine_only=spatial_only,
+                )
+                if not first and refined:
+                    kwargs["video"] = _to_pil(refined[-cond_frames:])
+                    kwargs["num_cond_frames"] = cond_frames
+                out = list(pipe.generate_refine(**kwargs)[0])
+                refined.extend(out if first else out[cond_frames:])
+                start += window if first else window - cond_frames
+                first = False
+                import torch as _t
+                _t.cuda.empty_cache()
+                unit_done("Janela de refinamento concluída")
+            all_frames = refined
+            if not spatial_only:
+                fps = 30
+        except Exception as exc:  # OOM ou outro — entrega o 480p em vez de falhar
+            import torch as _t
+            _t.cuda.empty_cache()
+            print(f"[job {job.id}] refino falhou ({exc}); salvando o clipe base 480p")
+            job.stage = "Refino indisponível (VRAM) — entregue em 480p"
+            all_frames = base_frames
+            fps = 15
 
     # ---- save --------------------------------------------------------------
     report("Codificando vídeo...", 0.99)
