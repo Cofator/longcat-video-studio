@@ -45,6 +45,9 @@ from pydantic import BaseModel, Field
 # Configuration
 # ---------------------------------------------------------------------------
 
+# Reduz fragmentação de VRAM (definido antes de o torch inicializar o CUDA).
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
 LONGCAT_REPO = os.environ.get("LONGCAT_REPO", "/workspace/LongCat-Video")
 CHECKPOINT_DIR = os.environ.get("CHECKPOINT_DIR", "/workspace/weights/LongCat-Video")
 # Avatar (audio-driven) — pesos baixados sob demanda no primeiro job de avatar.
@@ -215,14 +218,43 @@ class ModelRuntime:
                 dit = LongCatVideoTransformer3DModel.from_pretrained(
                     ckpt, subfolder="dit", cp_split_hw=[1, 1], torch_dtype=torch.bfloat16
                 )
+                # OFFLOAD do text encoder (UMT5 ~11 GB): numa GPU de 48 GB, o
+                # DiT (27 GB) + UMT5 + ativações estouram a VRAM (OOM). O
+                # wrapper mantém o encoder na CPU e o move para a GPU apenas
+                # durante o encode do prompt (1-2 s por job).
+                class _EncoderOnDemand(torch.nn.Module):
+                    def __init__(self, enc):
+                        super().__init__()
+                        self.enc = enc.to("cpu")
+
+                    @property
+                    def dtype(self):
+                        return self.enc.dtype
+
+                    @property
+                    def device(self):
+                        return self.enc.device
+
+                    def forward(self, *args, **kwargs):
+                        self.enc.to("cuda")
+                        try:
+                            return self.enc(*args, **kwargs)
+                        finally:
+                            self.enc.to("cpu")
+                            torch.cuda.empty_cache()
+
                 pipe = LongCatVideoPipeline(
                     tokenizer=tokenizer,
-                    text_encoder=text_encoder,
+                    text_encoder=_EncoderOnDemand(text_encoder),
                     vae=vae,
                     scheduler=scheduler,
                     dit=dit,
                 )
-                pipe.to("cuda")
+                # NÃO usamos pipe.to("cuda") — ele levaria o text encoder junto.
+                # self.device do pipeline já é "cuda"; movemos os demais à mão.
+                pipe.vae.to("cuda")
+                pipe.dit.to("cuda")
+                torch.cuda.empty_cache()
 
                 # 16-step CFG-distill LoRA is optional; enable when shipped with the
                 # checkpoint (folder name may vary between releases).
