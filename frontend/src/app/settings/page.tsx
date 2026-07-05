@@ -28,7 +28,7 @@ export default function SettingsPage() {
   const [anthropicApiKey, setAnthropicApiKey] = useState("");
   const [longcatApiKey, setLongcatApiKey] = useState("");
   const [openrouterApiKey, setOpenrouterApiKey] = useState("");
-  const [openrouterModel, setOpenrouterModel] = useState("meituan/longcat-2.0");
+  const [openrouterModel, setOpenrouterModel] = useState("deepseek/deepseek-chat-v3:free");
   const [llmProvider, setLlmProvider] = useState<"claude" | "longcat" | "openrouter">("claude");
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
@@ -260,15 +260,16 @@ export default function SettingsPage() {
                 type="text"
                 value={openrouterModel}
                 onChange={(e) => setOpenrouterModel(e.target.value)}
-                placeholder="meituan/longcat-2.0"
+                placeholder="deepseek/deepseek-chat-v3:free"
               />
               <div className="hint">
-                Ex.: <code>meituan/longcat-2.0</code>. Para usar <b>grátis</b>, escolha um modelo com sufixo{" "}
-                <code>:free</code> na lista de{" "}
+                Para <b>não pagar nada</b>, use um modelo com sufixo <code>:free</code>. Veja a lista de{" "}
                 <a href="https://openrouter.ai/models?max_price=0" target="_blank" style={{ textDecoration: "underline" }}>
                   modelos gratuitos
                 </a>{" "}
-                (ex.: <code>deepseek/deepseek-chat-v3:free</code>).
+                e copie o slug exato (ex.: <code>deepseek/deepseek-chat-v3:free</code>,{" "}
+                <code>meta-llama/llama-3.3-70b-instruct:free</code>). O LongCat-2.0 ainda não está no
+                OpenRouter.
               </div>
             </label>
           </>

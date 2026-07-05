@@ -7,7 +7,7 @@ const LONGCAT_BASE_URL = "https://api.longcat.chat/anthropic";
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const CLAUDE_MODEL = "claude-opus-4-8";
 const LONGCAT_MODEL = "LongCat-2.0";
-const OPENROUTER_DEFAULT_MODEL = "meituan/longcat-2.0";
+const OPENROUTER_DEFAULT_MODEL = "deepseek/deepseek-chat-v3:free";
 
 export type Provider = "claude" | "longcat" | "openrouter";
 

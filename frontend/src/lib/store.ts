@@ -14,7 +14,7 @@ const DEFAULT_SETTINGS: Settings = {
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
   longcatApiKey: process.env.LONGCAT_API_KEY ?? "",
   openrouterApiKey: process.env.OPENROUTER_API_KEY ?? "",
-  openrouterModel: process.env.OPENROUTER_MODEL ?? "meituan/longcat-2.0",
+  openrouterModel: process.env.OPENROUTER_MODEL ?? "deepseek/deepseek-chat-v3:free",
 };
 
 async function ensureDir() {
