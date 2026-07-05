@@ -73,6 +73,39 @@ if [ ! -f /workspace/weights/LongCat-Video/.download_complete ]; then
   done
 fi
 
+# ---- 2.5 LTX-2.3 (Lightricks) — segundo modelo, opcional -------------------
+# Baixado/instalado em background (não bloqueia o LongCat): ~35 GB de pesos
+# (checkpoint fp8 destilado + upscaler espacial + encoder de texto Gemma-3).
+# Se falhar ou ainda não tiver terminado, o worker reporta ltx_loaded=false e
+# jobs com model="ltx2.3" falham com um erro claro em vez de travar o boot.
+(
+  set -uo pipefail
+  exec >> /workspace/ltx_provision.log 2>&1
+  echo "== LTX-2.3 provisioning started: $(date) =="
+  if [ ! -d /workspace/LTX-2 ]; then
+    git clone https://github.com/Lightricks/LTX-2.git /workspace/LTX-2
+  fi
+  cd /workspace/LTX-2
+  pip install -e packages/ltx-core -e packages/ltx-pipelines || echo "WARN: ltx-core/ltx-pipelines install failed"
+
+  mkdir -p /workspace/weights/LTX-2.3
+  cd /workspace/weights/LTX-2.3
+  if [ ! -f .download_complete ]; then
+    for attempt in 1 2 3; do
+      echo "== download dos pesos LTX-2.3, tentativa $attempt =="
+      huggingface-cli download Lightricks/LTX-2.3-fp8 ltx-2.3-22b-distilled-fp8.safetensors \
+        --local-dir /workspace/weights/LTX-2.3 && \
+      huggingface-cli download Lightricks/LTX-2.3 ltx-2.3-spatial-upscaler-x2-1.1.safetensors \
+        --local-dir /workspace/weights/LTX-2.3 && \
+      huggingface-cli download google/gemma-3-12b-it --local-dir /workspace/weights/LTX-2.3/gemma-3-12b-it \
+        && { touch .download_complete; break; }
+      echo "download interrompido; retomando em 10s..."
+      sleep 10
+    done
+  fi
+  echo "== LTX-2.3 provisioning done: $(date) =="
+) &
+
 # ---- 3. Worker (this project) ----------------------------------------------
 STUDIO_REPO="${STUDIO_REPO:-https://github.com/Cofator/longcat-video-studio.git}"
 if [ ! -d /workspace/longcat-video-studio ]; then

@@ -109,7 +109,7 @@ export async function createInstance(
   // (No `client_id` — that's a CLI-only field and triggers `invalid_args` here.)
   return vastFetch(apiKey, "PUT", `/v0/asks/${offerId}/`, {
     image: DEFAULT_IMAGE,
-    disk: opts.disk ?? 100,
+    disk: opts.disk ?? 180,
     label: WORKER_LABEL,
     runtype: "ssh",
     target_state: "running",

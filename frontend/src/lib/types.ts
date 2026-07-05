@@ -17,10 +17,15 @@ export interface Settings {
   longcatApiKey: string; // chave da LongCat LLM (api.longcat.chat)
   openrouterApiKey: string; // chave do OpenRouter (openrouter.ai)
   openrouterModel: string; // ex.: meituan/longcat-2.0 ou um modelo grátis
+  glmApiKey: string; // chave da API oficial da Z.ai (GLM-5.2)
+  glmModel: string; // ex.: glm-5.2
 }
+
+export type ModelEngine = "longcat" | "ltx2.3";
 
 export interface JobParams {
   type: JobType;
+  model?: ModelEngine;
   prompt: string;
   negative_prompt?: string;
   num_frames?: number;
@@ -61,6 +66,7 @@ export interface WorkerJob {
   total_frames: number;
   has_video: boolean;
   params: {
+    model?: ModelEngine;
     num_frames: number;
     num_segments: number;
     refine: RefineMode;

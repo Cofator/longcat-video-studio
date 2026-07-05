@@ -2,13 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { JobType, RefineMode } from "@/lib/types";
+import type { JobType, ModelEngine, RefineMode } from "@/lib/types";
 
 const NUM_FRAMES = 93;
 const COND_FRAMES = 13;
 
 export default function GeneratePage() {
   const router = useRouter();
+  const [model, setModel] = useState<ModelEngine>("longcat");
   const [type, setType] = useState<JobType>("t2v");
   const [prompt, setPrompt] = useState("");
   const [negative, setNegative] = useState("");
@@ -17,7 +18,7 @@ export default function GeneratePage() {
   const [targetSeconds, setTargetSeconds] = useState(30);
   const [refine, setRefine] = useState<RefineMode>("none");
   const [useDistill, setUseDistill] = useState(false);
-  const [steps, setSteps] = useState(50);
+  const [steps, setSteps] = useState(40);
   const [guidance, setGuidance] = useState(4.0);
   const [seed, setSeed] = useState<string>("");
   const [segmentPrompts, setSegmentPrompts] = useState("");
@@ -25,8 +26,10 @@ export default function GeneratePage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string>("");
 
+  const isLtx = model === "ltx2.3";
+
   // 93 frames base + 80 novos por segmento, a 15 fps (30 fps com refino temporal)
-  const isLong = type === "long";
+  const isLong = !isLtx && type === "long";
   const numSegments = useMemo(() => {
     if (!isLong) return 0;
     const baseSecs = NUM_FRAMES / 15;
@@ -87,13 +90,14 @@ export default function GeneratePage() {
     setSubmitting(true);
     try {
       const body: Record<string, unknown> = {
-        type,
+        type: isLtx && type === "long" ? "t2v" : type,
+        model,
         prompt: prompt.trim(),
         num_frames: NUM_FRAMES,
         num_inference_steps: steps,
         guidance_scale: guidance,
-        refine,
-        use_distill: useDistill,
+        refine: isLtx ? "none" : refine,
+        use_distill: isLtx ? false : useDistill,
       };
       if (negative.trim()) body.negative_prompt = negative.trim();
       if (seed.trim()) body.seed = parseInt(seed, 10);
@@ -131,6 +135,21 @@ export default function GeneratePage() {
         continuação de segmentos, sem degradação de cor/qualidade.
       </p>
 
+      <div className="card" style={{ marginBottom: 14 }}>
+        <label className="field" style={{ margin: 0 }}>
+          <span className="lbl">Modelo</span>
+          <select value={model} onChange={(e) => setModel(e.target.value as ModelEngine)}>
+            <option value="longcat">LongCat-Video (13.6B) — texto/imagem/vídeo longo/avatar</option>
+            <option value="ltx2.3">LTX-2.3 (22B, Lightricks) — vídeo + áudio sincronizado</option>
+          </select>
+          <div className="hint">
+            {isLtx
+              ? "LTX-2.3 gera vídeo com áudio nativo (fala, efeitos, música), mas neste worker só nos modos texto→vídeo e imagem→vídeo (sem vídeo longo/refino/turbo por enquanto)."
+              : "LongCat-Video suporta todos os modos, incluindo vídeo longo por continuação e avatar (áudio-driven)."}
+          </div>
+        </label>
+      </div>
+
       <div className="tabs">
         <button className={`tab ${type === "t2v" ? "active" : ""}`} onClick={() => setType("t2v")}>
           ✍️ Texto → Vídeo
@@ -138,7 +157,12 @@ export default function GeneratePage() {
         <button className={`tab ${type === "i2v" ? "active" : ""}`} onClick={() => setType("i2v")}>
           🖼️ Imagem → Vídeo
         </button>
-        <button className={`tab ${type === "long" ? "active" : ""}`} onClick={() => setType("long")}>
+        <button
+          className={`tab ${type === "long" ? "active" : ""}`}
+          onClick={() => setType("long")}
+          disabled={isLtx}
+          title={isLtx ? "Indisponível com o LTX-2.3 neste worker" : undefined}
+        >
           🎞️ Vídeo longo (minutos)
         </button>
       </div>
@@ -229,14 +253,16 @@ export default function GeneratePage() {
           </>
         )}
 
-        <label className="field">
-          <span className="lbl">Qualidade final</span>
-          <select value={refine} onChange={(e) => setRefine(e.target.value as RefineMode)}>
-            <option value="none">480p rápido (sem refinamento)</option>
-            <option value="spatial">720p — refinamento espacial</option>
-            <option value="spatiotemporal">720p 30fps — refinamento espaço-temporal (mais lento)</option>
-          </select>
-        </label>
+        {!isLtx && (
+          <label className="field">
+            <span className="lbl">Qualidade final</span>
+            <select value={refine} onChange={(e) => setRefine(e.target.value as RefineMode)}>
+              <option value="none">480p rápido (sem refinamento)</option>
+              <option value="spatial">720p — refinamento espacial</option>
+              <option value="spatiotemporal">720p 30fps — refinamento espaço-temporal (mais lento)</option>
+            </select>
+          </label>
+        )}
 
         <button className="tab" onClick={() => setAdvanced(!advanced)} style={{ marginBottom: 14 }}>
           {advanced ? "▲ Ocultar avançado" : "▼ Opções avançadas"}
@@ -285,18 +311,20 @@ export default function GeneratePage() {
                   placeholder="aleatória"
                 />
               </label>
-              <label className="field row" style={{ gap: 8 }}>
-                <input
-                  type="checkbox"
-                  checked={useDistill}
-                  onChange={(e) => setUseDistill(e.target.checked)}
-                  style={{ width: "auto" }}
-                />
-                <span>
-                  Modo turbo (LoRA destilada, 16 passos) —{" "}
-                  <span className="dim">se disponível no checkpoint</span>
-                </span>
-              </label>
+              {!isLtx && (
+                <label className="field row" style={{ gap: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={useDistill}
+                    onChange={(e) => setUseDistill(e.target.checked)}
+                    style={{ width: "auto" }}
+                  />
+                  <span>
+                    Modo turbo (LoRA destilada, 16 passos) —{" "}
+                    <span className="dim">se disponível no checkpoint</span>
+                  </span>
+                </label>
+              )}
             </div>
           </div>
         )}

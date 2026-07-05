@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 import type { VastInstance, VastOffer } from "@/lib/types";
 
 const GPU_PRESETS: { label: string; names: string[]; minRam?: number }[] = [
+  { label: "RTX PRO 6000 (96 GB) — mais rápida", names: ["RTX PRO 6000 WS", "RTX PRO 6000 S"], minRam: 90000 },
   { label: "Recomendadas (≥48 GB, Ampere+)", names: [], minRam: 48000 },
-  { label: "H100", names: ["H100_SXM", "H100_PCIE", "H100_NVL"] },
-  { label: "A100 80GB", names: ["A100_SXM4", "A100_PCIE", "A100X"], minRam: 75000 },
-  { label: "L40S / A6000 (48 GB)", names: ["L40S", "L40", "RTX_A6000", "RTX_6000Ada"] },
+  { label: "H100", names: ["H100 SXM", "H100 PCIE", "H100 NVL"] },
+  { label: "A100 80GB", names: ["A100 SXM4", "A100 PCIE", "A100X"], minRam: 75000 },
+  { label: "L40S / A6000 (48 GB)", names: ["L40S", "L40", "RTX A6000", "RTX 6000Ada"] },
   { label: "Qualquer (≥24 GB — pode faltar VRAM)", names: [], minRam: 24000 },
 ];
 
@@ -73,7 +74,7 @@ export default function GpusPage() {
           gpuNames: p.names.length ? p.names : undefined,
           minGpuRam: p.minRam,
           maxPrice,
-          minDisk: 100,
+          minDisk: 180,
           numGpus: 1,
         }),
       });
@@ -95,7 +96,7 @@ export default function GpusPage() {
       const res = await fetch("/api/vast/instances", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ offerId, disk: 100 }),
+        body: JSON.stringify({ offerId, disk: 180 }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Falha ao criar instância");

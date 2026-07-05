@@ -56,6 +56,17 @@ AVATAR_CHECKPOINT_DIR = os.environ.get(
 )
 AVATAR_MODEL_TYPE = os.environ.get("AVATAR_MODEL_TYPE", "avatar-v1.5")
 AVATAR_REPO_ID = os.environ.get("AVATAR_REPO_ID", "meituan-longcat/LongCat-Video-Avatar-1.5")
+# LTX-2.3 (Lightricks) — segundo modelo, opcional. Pesos baixados sob demanda
+# no primeiro job com model="ltx2.3" (ver vast_onstart.sh).
+LTX_REPO = os.environ.get("LTX_REPO", "/workspace/LTX-2")
+LTX_WEIGHTS_DIR = os.environ.get("LTX_WEIGHTS_DIR", "/workspace/weights/LTX-2.3")
+LTX_CHECKPOINT = os.environ.get(
+    "LTX_CHECKPOINT", str(Path(LTX_WEIGHTS_DIR) / "ltx-2.3-22b-distilled-fp8.safetensors")
+)
+LTX_UPSAMPLER = os.environ.get(
+    "LTX_UPSAMPLER", str(Path(LTX_WEIGHTS_DIR) / "ltx-2.3-spatial-upscaler-x2-1.1.safetensors")
+)
+LTX_GEMMA_DIR = os.environ.get("LTX_GEMMA_DIR", str(Path(LTX_WEIGHTS_DIR) / "gemma-3-12b-it"))
 WORKER_TOKEN = os.environ.get("WORKER_TOKEN", "")
 OUTPUT_DIR = Path(os.environ.get("OUTPUT_DIR", "outputs")).absolute()
 UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR", "uploads")).absolute()
@@ -87,11 +98,12 @@ class AudioInput(BaseModel):
 
 class JobParams(BaseModel):
     type: str = Field(..., description="t2v | i2v | long | avatar-single | avatar-multi")
+    model: str = Field("longcat", description="longcat | ltx2.3 — motor de geração")
     prompt: str = ""
     negative_prompt: str = DEFAULT_NEGATIVE_PROMPT
     # base generation
     num_frames: int = 93
-    num_inference_steps: int = 50
+    num_inference_steps: int = 40
     guidance_scale: float = 4.0
     seed: Optional[int] = None
     # long video
@@ -309,6 +321,52 @@ class ModelRuntime:
 
 RUNTIME = ModelRuntime()
 
+
+class LTXRuntime:
+    """Carrega o LTX-2.3 (Lightricks) sob demanda — segundo motor, opcional.
+
+    Usa o checkpoint fp8 destilado (menos VRAM, poucos passos) via o pacote
+    de baixo nível `ltx_pipelines` (o mesmo usado no repo oficial
+    github.com/Lightricks/LTX-2). Como este modelo é muito recente, os nomes
+    de parâmetro foram tirados do README oficial do pacote — o primeiro job
+    real deve ser tratado como validação, igual ocorreu com o LongCat.
+    """
+
+    def __init__(self):
+        self.pipe = None
+        self.lock = threading.Lock()
+        self.loading = False
+        self.load_error: Optional[str] = None
+
+    def ensure_loaded(self, report=lambda msg: None):
+        with self.lock:
+            if self.pipe is not None:
+                return self.pipe
+            self.loading = True
+            self.load_error = None
+            try:
+                report("Carregando LTX-2.3 (pode levar alguns minutos)")
+                if LTX_REPO not in sys.path:
+                    sys.path.insert(0, LTX_REPO)
+                from ltx_pipelines.ti2vid_two_stages import TI2VidTwoStagesPipeline
+
+                self.pipe = TI2VidTwoStagesPipeline(
+                    checkpoint_path=LTX_CHECKPOINT,
+                    distilled_lora=[],  # checkpoint já é a variante destilada
+                    spatial_upsampler_path=LTX_UPSAMPLER,
+                    gemma_root=LTX_GEMMA_DIR,
+                    loras=[],
+                )
+                return self.pipe
+            except Exception:
+                self.load_error = traceback.format_exc()
+                raise
+            finally:
+                self.loading = False
+
+
+LTX_RUNTIME = LTXRuntime()
+
 # ---------------------------------------------------------------------------
 # Generation
 # ---------------------------------------------------------------------------
@@ -495,6 +553,102 @@ def run_job(job: Job):
     job.output_path = out_path
     job.fps = fps
     job.total_frames = len(all_frames)
+
+
+def run_ltx_job(job: Job):
+    """t2v/i2v com o LTX-2.3 (áudio+vídeo sincronizados, até 4K/50fps no
+    checkpoint oficial — aqui usamos resolução/fps conservadores por padrão
+    para caber em uma única GPU)."""
+    import torch
+
+    p = job.params
+
+    def report(stage: str, progress: float):
+        job.stage = stage
+        job.progress = max(job.progress, min(progress, 0.999))
+        print(f"[job {job.id}] {progress:.0%} {stage}")
+
+    pipe = LTX_RUNTIME.ensure_loaded(lambda msg: report(msg, 0.01))
+
+    from ltx_core.components.guiders import MultiModalGuiderParams
+    from ltx_core.model.video_vae import TilingConfig
+
+    # num_frames no formato 8k+1 exigido pelo modelo.
+    k = max(1, round((p.num_frames - 1) / 8))
+    num_frames = k * 8 + 1
+    frame_rate = 25.0
+
+    video_guider = MultiModalGuiderParams(
+        cfg_scale=p.guidance_scale, stg_scale=1.0, rescale_scale=0.7,
+        modality_scale=3.0, skip_step=0, stg_blocks=[29],
+    )
+    audio_guider = MultiModalGuiderParams(
+        cfg_scale=max(p.guidance_scale, 7.0), stg_scale=1.0, rescale_scale=0.7,
+        modality_scale=3.0, skip_step=0, stg_blocks=[29],
+    )
+
+    generator_seed = int(p.seed) if p.seed is not None else int(uuid.uuid4().int % (2**31))
+
+    kwargs = dict(
+        prompt=p.prompt,
+        negative_prompt=p.negative_prompt,
+        seed=generator_seed,
+        height=512,
+        width=768,
+        num_frames=num_frames,
+        frame_rate=frame_rate,
+        num_inference_steps=p.num_inference_steps,
+        video_guider_params=video_guider,
+        audio_guider_params=audio_guider,
+        tiling_config=TilingConfig.default(),
+    )
+
+    image_path = None
+    if p.image_b64:
+        from ltx_pipelines.utils.args import ImageConditioningInput
+
+        image = _decode_image(p.image_b64)
+        image_path = str(UPLOAD_DIR / f"{job.id}_ref.png")
+        image.save(image_path)
+        kwargs["images"] = [ImageConditioningInput(image_path, 0, 1.0, num_frames)]
+
+    report("Gerando com LTX-2.3...", 0.05)
+    video, audio = pipe(**kwargs)
+    report("Codificando vídeo...", 0.95)
+
+    out_path = OUTPUT_DIR / f"{job.id}.mp4"
+    _save_video_av(video, audio, out_path, frame_rate)
+    job.output_path = out_path
+    job.fps = int(frame_rate)
+    job.total_frames = num_frames
+
+
+def _save_video_av(video, audio, path: Path, fps: float):
+    """Salva vídeo+áudio (LTX-2.3 gera os dois juntos) em mp4 com AAC."""
+    import numpy as np
+    import torch
+    from torchvision.io import write_video
+
+    if not torch.is_tensor(video):
+        video = torch.from_numpy(np.asarray(video))
+    video = video.detach().cpu().float()
+    if video.max() <= 1.5:
+        video = video * 255.0
+    video = video.clamp(0, 255).to(torch.uint8)
+
+    audio_array = None
+    if audio is not None:
+        if not torch.is_tensor(audio):
+            audio = torch.from_numpy(np.asarray(audio))
+        audio_array = audio.detach().cpu().float()
+        if audio_array.dim() == 1:
+            audio_array = audio_array.unsqueeze(0)
+        write_video(
+            str(path), video, fps=fps, video_codec="libx264", options={"crf": "18"},
+            audio_array=audio_array, audio_fps=48000, audio_codec="aac",
+        )
+    else:
+        write_video(str(path), video, fps=fps, video_codec="libx264", options={"crf": "18"})
 
 
 # ---------------------------------------------------------------------------
@@ -689,6 +843,8 @@ def worker_loop():
         try:
             if job.params.type in ("avatar-single", "avatar-multi"):
                 run_avatar_job(job)
+            elif job.params.model == "ltx2.3":
+                run_ltx_job(job)
             else:
                 run_job(job)
             job.status = "completed"
@@ -815,6 +971,9 @@ def health():
         "load_error": (RUNTIME.load_error or "")[-1000:] or None,
         "distill_available": RUNTIME.distill_available,
         "checkpoint_dir": CHECKPOINT_DIR,
+        "ltx_loaded": LTX_RUNTIME.pipe is not None,
+        "ltx_loading": LTX_RUNTIME.loading,
+        "ltx_load_error": (LTX_RUNTIME.load_error or "")[-1000:] or None,
         "avatar_supported": True,
         "avatar_ready": _avatar_ready["weights"],
         "queue_size": len(JOB_QUEUE),
@@ -845,6 +1004,8 @@ def create_job(params: JobParams):
         if any(not a.data_b64 for a in audios):
             raise HTTPException(400, "every audio must include data_b64")
     else:
+        if params.model == "ltx2.3" and params.type not in ("t2v", "i2v"):
+            raise HTTPException(400, "ltx2.3 currently supports only t2v and i2v")
         if params.type == "i2v" and not params.image_b64:
             raise HTTPException(400, "i2v requires image_b64")
         if not params.prompt.strip() and params.type != "i2v":
