@@ -14,9 +14,13 @@ RUN git clone https://github.com/meituan-longcat/LongCat-Video.git /workspace/Lo
     && pip install --no-cache-dir "huggingface_hub[cli]<1.0"
 
 # LTX-2.3 (Lightricks) — segundo modelo, opcional. Pesos baixados no CMD abaixo.
+# É um workspace uv (tool.uv.sources com {workspace = true}) — "pip install -e"
+# nao resolve isso; usamos "uv sync" para montar um .venv proprio, exposto ao
+# worker via site.addsitedir em runtime (ver LTXRuntime.ensure_loaded).
 RUN git clone https://github.com/Lightricks/LTX-2.git /workspace/LTX-2 \
-    && pip install --no-cache-dir -e /workspace/LTX-2/packages/ltx-core -e /workspace/LTX-2/packages/ltx-pipelines \
-    || echo "WARN: LTX-2 install failed (segundo modelo indisponivel)"
+    && pip install --no-cache-dir uv \
+    && cd /workspace/LTX-2 && uv sync --frozen \
+    || echo "WARN: LTX-2 uv sync failed (segundo modelo indisponivel)"
 
 COPY server.py /workspace/worker/server.py
 COPY requirements.txt /workspace/worker/requirements.txt

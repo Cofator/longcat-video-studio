@@ -346,8 +346,20 @@ class LTXRuntime:
             self.load_error = None
             try:
                 report("Carregando LTX-2.3 (pode levar alguns minutos)")
-                if LTX_REPO not in sys.path:
-                    sys.path.insert(0, LTX_REPO)
+                # LTX-2 é um workspace uv (packages/ltx-core, packages/ltx-pipelines);
+                # o provisionamento roda `uv sync` num .venv próprio em vez de
+                # "pip install -e" (que não resolve `tool.uv.sources` workspace
+                # refs). Expõe esse .venv ao processo global do worker.
+                import glob
+                import site
+
+                venv_site = glob.glob(f"{LTX_REPO}/.venv/lib/python3.*/site-packages")
+                if venv_site:
+                    site.addsitedir(venv_site[0])
+                else:
+                    raise RuntimeError(
+                        f"{LTX_REPO}/.venv não encontrado — rode `uv sync --frozen` em {LTX_REPO}"
+                    )
                 from ltx_pipelines.ti2vid_two_stages import TI2VidTwoStagesPipeline
 
                 self.pipe = TI2VidTwoStagesPipeline(

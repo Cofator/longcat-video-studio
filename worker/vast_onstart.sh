@@ -86,7 +86,15 @@ fi
     git clone https://github.com/Lightricks/LTX-2.git /workspace/LTX-2
   fi
   cd /workspace/LTX-2
-  pip install -e packages/ltx-core -e packages/ltx-pipelines || echo "WARN: ltx-core/ltx-pipelines install failed"
+  # É um workspace uv (packages/ltx-core e packages/ltx-pipelines usam
+  # `tool.uv.sources` com {workspace = true}) — "pip install -e" sozinho NÃO
+  # resolve isso e falha silenciosamente (daí o ModuleNotFoundError no worker).
+  # `uv sync` monta um .venv com tudo resolvido corretamente; o worker (que
+  # roda no python global) enxerga esse .venv via site.addsitedir em runtime.
+  if [ ! -d .venv ]; then
+    pip install -q uv || true
+    uv sync --frozen || echo "WARN: uv sync failed (LTX-2.3 indisponivel)"
+  fi
 
   mkdir -p /workspace/weights/LTX-2.3
   cd /workspace/weights/LTX-2.3
