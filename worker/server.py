@@ -418,6 +418,23 @@ def run_job(job: Job):
 
     # ---- coarse-to-fine refinement (720p) ---------------------------------
     if p.refine != "none":
+        import numpy as np
+        from PIL import Image as _Image
+
+        # generate_refine espera stage1_video/video como LISTA de PIL Images
+        # (uint8), não frames numpy float — igual ao demo oficial.
+        def _to_pil(frs):
+            pil = []
+            for f in frs:
+                a = np.asarray(f)
+                if a.dtype != np.uint8:
+                    a = a.astype(np.float32)
+                    if a.max() <= 1.5:
+                        a = a * 255.0
+                    a = np.clip(a, 0, 255).astype(np.uint8)
+                pil.append(_Image.fromarray(a))
+            return pil
+
         RUNTIME.set_distill(False)
         spatial_only = p.refine == "spatial"
         report("Refinando para 720p...", done_units / total_units)
@@ -432,16 +449,15 @@ def run_job(job: Job):
                 break
             kwargs = dict(
                 prompt=p.prompt,
-                stage1_video=chunk,
+                stage1_video=_to_pil(chunk),
                 num_inference_steps=p.refine_steps,
                 generator=generator,
                 spatial_refine_only=spatial_only,
             )
             if not first and refined:
-                kwargs["video"] = refined[-cond_frames:]
+                kwargs["video"] = _to_pil(refined[-cond_frames:])
                 kwargs["num_cond_frames"] = cond_frames
-            out = pipe.generate_refine(**kwargs)[0]
-            out = list(out)
+            out = list(pipe.generate_refine(**kwargs)[0])
             refined.extend(out if first else out[cond_frames:])
             start += window if first else window - cond_frames
             first = False
