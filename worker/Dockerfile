@@ -10,7 +10,7 @@ RUN git clone https://github.com/meituan-longcat/LongCat-Video.git /workspace/Lo
     && pip install --no-cache-dir -r /workspace/LongCat-Video/requirements.txt \
     && pip install --no-cache-dir ninja psutil packaging \
     && (pip install --no-cache-dir flash-attn --no-build-isolation || echo "flash-attn skipped") \
-    && pip install --no-cache-dir -U "huggingface_hub[cli]"
+    && pip install --no-cache-dir "huggingface_hub[cli]<1.0"
 
 COPY server.py /workspace/worker/server.py
 COPY requirements.txt /workspace/worker/requirements.txt

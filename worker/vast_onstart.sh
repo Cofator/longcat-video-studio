@@ -46,7 +46,9 @@ else
 fi
 
 # ---- 2. Model weights -------------------------------------------------------
-pip install -U "huggingface_hub[cli]"
+# IMPORTANTE: huggingface_hub deve ficar < 1.0 — o transformers do LongCat exige
+# huggingface-hub<1.0; um "-U" instalaria a 1.x e quebra o import do transformers.
+pip install "huggingface_hub[cli]<1.0"
 mkdir -p /workspace/weights
 if [ ! -f /workspace/weights/LongCat-Video/.download_complete ]; then
   huggingface-cli download meituan-longcat/LongCat-Video \
