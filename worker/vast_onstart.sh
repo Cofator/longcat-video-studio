@@ -55,12 +55,22 @@ pip install --force-reinstall --no-deps --no-cache-dir "$FA_URL" \
 # ---- 2. Model weights -------------------------------------------------------
 # IMPORTANTE: huggingface_hub deve ficar < 1.0 — o transformers do LongCat exige
 # huggingface-hub<1.0; um "-U" instalaria a 1.x e quebra o import do transformers.
-pip install "huggingface_hub[cli]<1.0"
+pip install "huggingface_hub[cli]<1.0" hf_transfer
+# hf_transfer: download paralelo/rápido e resiliente (evita stalls em hosts lentos).
+export HF_HUB_ENABLE_HF_TRANSFER=1
 mkdir -p /workspace/weights
 if [ ! -f /workspace/weights/LongCat-Video/.download_complete ]; then
-  huggingface-cli download meituan-longcat/LongCat-Video \
-    --local-dir /workspace/weights/LongCat-Video && \
-    touch /workspace/weights/LongCat-Video/.download_complete
+  # Retenta: huggingface-cli retoma downloads parciais, então repetir cobre stalls.
+  for attempt in 1 2 3 4 5; do
+    echo "== download do modelo, tentativa $attempt =="
+    if huggingface-cli download meituan-longcat/LongCat-Video \
+         --local-dir /workspace/weights/LongCat-Video; then
+      touch /workspace/weights/LongCat-Video/.download_complete
+      break
+    fi
+    echo "download interrompido; retomando em 10s..."
+    sleep 10
+  done
 fi
 
 # ---- 3. Worker (this project) ----------------------------------------------
