@@ -34,16 +34,23 @@ if [ -f requirements_avatar.txt ]; then
 fi
 pip install librosa soundfile "audio-separator[cpu]" onnxruntime || echo "WARN: avatar audio deps failed"
 
-# FlashAttention-2 — OPCIONAL. A compilação da fonte (--no-build-isolation)
-# leva 20-40 min e não é necessária: o modelo cai para SDPA/xformers.
-# Só instala se INSTALL_FLASH_ATTN=1 for definido (usa wheel pré-compilado se houver).
-if [ "${INSTALL_FLASH_ATTN:-0}" = "1" ]; then
-  pip install ninja psutil packaging
-  pip install flash-attn || echo "WARN: flash-attn install failed, continuing (usa SDPA/xformers)"
-else
-  echo "flash-attn pulado (INSTALL_FLASH_ATTN!=1) — usando SDPA/xformers"
-  pip install xformers || echo "WARN: xformers install failed"
-fi
+# FlashAttention-2 — OBRIGATÓRIA. O LongCat NÃO tem fallback para SDPA; usa
+# flashattn2 por padrão. O requirements.txt instala flash-attn compilada com
+# build-isolation (contra outro torch) -> "undefined symbol". Reinstalamos o
+# wheel PRÉ-COMPILADO que casa com o torch/ABI instalados (rápido, sem compilar).
+# Também removemos o xformers: o diffusers o importa e bate no flash-attn quebrado.
+pip uninstall -y xformers >/dev/null 2>&1 || true
+FA_VER=2.7.4.post1
+PYTAG=$(python -c "import sys;print(f'cp{sys.version_info.major}{sys.version_info.minor}')")
+ABI=$(python -c "import torch;print('TRUE' if torch._C._GLIBCXX_USE_CXX11_ABI else 'FALSE')")
+TMM=$(python -c "import torch;print('.'.join(torch.__version__.split('+')[0].split('.')[:2]))")
+FA_WHL="flash_attn-${FA_VER}+cu12torch${TMM}cxx11abi${ABI}-${PYTAG}-${PYTAG}-linux_x86_64.whl"
+FA_URL="https://github.com/Dao-AILab/flash-attention/releases/download/v${FA_VER}/${FA_WHL}"
+echo "Reinstalando flash-attn compatível: $FA_URL"
+pip install --force-reinstall --no-deps --no-cache-dir "$FA_URL" \
+  || { echo "wheel falhou; compilando da fonte (lento)"; pip install ninja packaging psutil; \
+       pip install flash-attn==${FA_VER} --no-build-isolation --force-reinstall --no-cache-dir; } \
+  || echo "WARN: nao foi possivel instalar flash-attn"
 
 # ---- 2. Model weights -------------------------------------------------------
 # IMPORTANTE: huggingface_hub deve ficar < 1.0 — o transformers do LongCat exige
