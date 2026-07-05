@@ -673,6 +673,28 @@ def gpu_info():
         return []
 
 
+@app.post("/reload", dependencies=[Depends(check_auth)])
+def reload_worker():
+    """Puxa o código mais novo do repositório e reinicia o worker (re-exec).
+    Permite aplicar correções sem recriar a instância."""
+    repo = "/workspace/longcat-video-studio"
+    out = ""
+    try:
+        out = subprocess.check_output(
+            ["git", "-C", repo, "pull", "--ff-only"],
+            text=True, stderr=subprocess.STDOUT, timeout=60,
+        )
+    except Exception as exc:  # pragma: no cover
+        out = f"git pull falhou: {exc}"
+
+    def _restart():
+        time.sleep(1)
+        os.execv(sys.executable, [sys.executable, os.path.join(repo, "worker", "server.py")])
+
+    threading.Thread(target=_restart, daemon=True).start()
+    return {"ok": True, "git": out[-500:], "restarting": True}
+
+
 @app.get("/health")
 def health():
     running = [j for j in JOBS.values() if j.status == "running"]
