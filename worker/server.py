@@ -279,14 +279,25 @@ def _decode_image(image_b64: str):
 
 
 def _save_video(frames, path: Path, fps: int):
-    """frames: list/tensor of HWC uint8 frames -> mp4 (libx264, crf 18)."""
+    """frames: list/tensor/np de frames HWC -> mp4 (libx264, crf 18).
+
+    O pipeline retorna float em [0,1] (output_type padrão 'np'); é preciso
+    multiplicar por 255 antes de converter para uint8 — senão o vídeo fica preto.
+    """
+    import numpy as np
     import torch
     from torchvision.io import write_video
 
     if isinstance(frames, list):
-        frames = torch.stack([f if torch.is_tensor(f) else torch.as_tensor(f) for f in frames])
-    frames = frames.cpu()
+        frames = np.stack([np.asarray(f) for f in frames])
+    if not torch.is_tensor(frames):
+        frames = torch.from_numpy(np.asarray(frames))
+    frames = frames.detach().cpu()
     if frames.dtype != torch.uint8:
+        frames = frames.float()
+        # se está normalizado em [0,1], reescala para [0,255]
+        if float(frames.max()) <= 1.5:
+            frames = frames * 255.0
         frames = frames.clamp(0, 255).to(torch.uint8)
     write_video(str(path), frames, fps=fps, video_codec="libx264", options={"crf": "18"})
 
