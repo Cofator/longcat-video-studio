@@ -719,6 +719,31 @@ def gpu_info():
         return []
 
 
+@app.get("/outputs", dependencies=[Depends(check_auth)])
+def list_outputs():
+    """Lista os MP4 no disco (sobrevive a reinícios do worker, ao contrário
+    da fila em memória)."""
+    files = sorted(OUTPUT_DIR.glob("*.mp4"), key=lambda f: f.stat().st_mtime, reverse=True)
+    return {
+        "files": [
+            {"name": f.name, "size_mb": round(f.stat().st_size / 1e6, 2), "mtime": f.stat().st_mtime}
+            for f in files
+        ]
+    }
+
+
+@app.get("/outputs/{name}", dependencies=[Depends(check_auth)])
+def get_output(name: str):
+    """Serve um MP4 direto do disco pelo nome do arquivo."""
+    safe = os.path.basename(name)
+    if not safe.endswith(".mp4"):
+        raise HTTPException(400, "apenas .mp4")
+    path = OUTPUT_DIR / safe
+    if not path.exists():
+        raise HTTPException(404, "arquivo nao encontrado")
+    return FileResponse(path, media_type="video/mp4", filename=safe)
+
+
 @app.post("/reload", dependencies=[Depends(check_auth)])
 def reload_worker():
     """Puxa o código mais novo do repositório e reinicia o worker (re-exec).
