@@ -967,22 +967,37 @@ def reload_worker():
 _ltx_provision = {"running": False, "done": False, "error": None, "log": []}
 
 
+class ProvisionLtxReq(BaseModel):
+    # Token HF é necessário porque o Gemma-3 (text encoder do LTX) é gated.
+    # Passado só na chamada; usado no env do subprocesso, não é persistido.
+    hf_token: Optional[str] = None
+
+
 @app.post("/provision_ltx", dependencies=[Depends(check_auth)])
-def provision_ltx_start():
+def provision_ltx_start(req: ProvisionLtxReq = ProvisionLtxReq()):
     """(Re)baixa os pesos do LTX-2.3 que estiverem faltando, com os repos
     corretos — em background, sem derrubar o worker. Idempotente: só baixa o
-    que falta. Útil para corrigir um provisionamento anterior (ex.: a variante
-    errada do Gemma, sem tokenizer.model)."""
+    que falta. O Gemma-3 é gated, então um hf_token (de uma conta que aceitou a
+    licença do Gemma) é necessário; ele é usado apenas no env do download."""
     if _ltx_provision["running"]:
         return {"ok": True, "already_running": True, "log": _ltx_provision["log"][-20:]}
 
+    hf_token = (req.hf_token or "").strip()
+
     def log(m: str):
+        # nunca ecoa o token no log
+        if hf_token and hf_token in m:
+            m = m.replace(hf_token, "***")
         _ltx_provision["log"].append(m)
         del _ltx_provision["log"][:-60]
         print(f"[provision_ltx] {m}")
 
     def work():
         _ltx_provision.update(running=True, done=False, error=None, log=[])
+        env = dict(os.environ)
+        if hf_token:
+            env["HF_TOKEN"] = hf_token
+            env["HUGGING_FACE_HUB_TOKEN"] = hf_token
         try:
             os.makedirs(LTX_WEIGHTS_DIR, exist_ok=True)
             tok = os.path.join(LTX_GEMMA_DIR, "tokenizer.model")
@@ -994,7 +1009,7 @@ def provision_ltx_start():
                     ["huggingface-cli", "download",
                      "google/gemma-3-12b-it-qat-q4_0-unquantized",
                      "--local-dir", LTX_GEMMA_DIR],
-                    cwd="/workspace", on_line=lambda l: log(l[-80:]),
+                    cwd="/workspace", on_line=lambda l: log(l[-80:]), env=env,
                 )
                 if rc != 0:
                     raise RuntimeError(f"download do gemma terminou com código {rc}")
@@ -1003,14 +1018,14 @@ def provision_ltx_start():
                 _run_stream(
                     ["huggingface-cli", "download", "Lightricks/LTX-2.3-fp8",
                      "ltx-2.3-22b-distilled-fp8.safetensors", "--local-dir", LTX_WEIGHTS_DIR],
-                    cwd="/workspace", on_line=lambda l: log(l[-80:]),
+                    cwd="/workspace", on_line=lambda l: log(l[-80:]), env=env,
                 )
             if not os.path.exists(LTX_UPSAMPLER):
                 log("baixando spatial upscaler...")
                 _run_stream(
                     ["huggingface-cli", "download", "Lightricks/LTX-2.3",
                      "ltx-2.3-spatial-upscaler-x2-1.1.safetensors", "--local-dir", LTX_WEIGHTS_DIR],
-                    cwd="/workspace", on_line=lambda l: log(l[-80:]),
+                    cwd="/workspace", on_line=lambda l: log(l[-80:]), env=env,
                 )
             _ltx_provision["done"] = True
             log("provisionamento do LTX concluído.")
