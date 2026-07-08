@@ -322,62 +322,25 @@ class ModelRuntime:
 RUNTIME = ModelRuntime()
 
 
-class LTXRuntime:
-    """Carrega o LTX-2.3 (Lightricks) sob demanda — segundo motor, opcional.
-
-    Usa o checkpoint fp8 destilado (menos VRAM, poucos passos) via o pacote
-    de baixo nível `ltx_pipelines` (o mesmo usado no repo oficial
-    github.com/Lightricks/LTX-2). Como este modelo é muito recente, os nomes
-    de parâmetro foram tirados do README oficial do pacote — o primeiro job
-    real deve ser tratado como validação, igual ocorreu com o LongCat.
-    """
+class LTXStatus:
+    """Status do LTX-2.3. Diferente do LongCat, o LTX NÃO carrega no processo
+    do worker — ele roda isolado no .venv próprio via subprocesso (ver
+    run_ltx_job e ltx_runner.py), porque exige transformers/torch que conflitam
+    com os do LongCat. Aqui só rastreamos disponibilidade (arquivos presentes)
+    e o último erro de execução, para o /health."""
 
     def __init__(self):
-        self.pipe = None
-        self.lock = threading.Lock()
-        self.loading = False
-        self.load_error: Optional[str] = None
+        self.running = False
+        self.last_error: Optional[str] = None
 
-    def ensure_loaded(self, report=lambda msg: None):
-        with self.lock:
-            if self.pipe is not None:
-                return self.pipe
-            self.loading = True
-            self.load_error = None
-            try:
-                report("Carregando LTX-2.3 (pode levar alguns minutos)")
-                # LTX-2 é um workspace uv (packages/ltx-core, packages/ltx-pipelines);
-                # o provisionamento roda `uv sync` num .venv próprio em vez de
-                # "pip install -e" (que não resolve `tool.uv.sources` workspace
-                # refs). Expõe esse .venv ao processo global do worker.
-                import glob
-                import site
+    def ready(self) -> bool:
+        import glob
 
-                venv_site = glob.glob(f"{LTX_REPO}/.venv/lib/python3.*/site-packages")
-                if venv_site:
-                    site.addsitedir(venv_site[0])
-                else:
-                    raise RuntimeError(
-                        f"{LTX_REPO}/.venv não encontrado — rode `uv sync --frozen` em {LTX_REPO}"
-                    )
-                from ltx_pipelines.ti2vid_two_stages import TI2VidTwoStagesPipeline
-
-                self.pipe = TI2VidTwoStagesPipeline(
-                    checkpoint_path=LTX_CHECKPOINT,
-                    distilled_lora=[],  # checkpoint já é a variante destilada
-                    spatial_upsampler_path=LTX_UPSAMPLER,
-                    gemma_root=LTX_GEMMA_DIR,
-                    loras=[],
-                )
-                return self.pipe
-            except Exception:
-                self.load_error = traceback.format_exc()
-                raise
-            finally:
-                self.loading = False
+        has_venv = bool(glob.glob(f"{LTX_REPO}/.venv/bin/python"))
+        return has_venv and os.path.exists(LTX_CHECKPOINT)
 
 
-LTX_RUNTIME = LTXRuntime()
+LTX_STATUS = LTXStatus()
 
 # ---------------------------------------------------------------------------
 # Generation
@@ -568,10 +531,18 @@ def run_job(job: Job):
 
 
 def run_ltx_job(job: Job):
-    """t2v/i2v com o LTX-2.3 (áudio+vídeo sincronizados, até 4K/50fps no
-    checkpoint oficial — aqui usamos resolução/fps conservadores por padrão
-    para caber em uma única GPU)."""
-    import torch
+    """t2v/i2v com o LTX-2.3 (áudio+vídeo sincronizados).
+
+    O LTX exige transformers>=4.52 e torch~=2.7, que CONFLITAM com o
+    transformers/torch do LongCat no ambiente global. Por isso a geração roda
+    num SUBPROCESSO isolado, com o python do .venv próprio do LTX (montado por
+    `uv sync`), via worker/ltx_runner.py. O runner devolve os arrays de
+    vídeo/áudio num .npz e nós codificamos o mp4 aqui (o ambiente global tem
+    torchvision). Isso evita o sombreamento de dependências entre os dois
+    modelos — a causa do ImportError de Gemma3 na primeira versão."""
+    import glob
+
+    import numpy as np
 
     p = job.params
 
@@ -580,59 +551,80 @@ def run_ltx_job(job: Job):
         job.progress = max(job.progress, min(progress, 0.999))
         print(f"[job {job.id}] {progress:.0%} {stage}")
 
-    pipe = LTX_RUNTIME.ensure_loaded(lambda msg: report(msg, 0.01))
+    venv_py = glob.glob(f"{LTX_REPO}/.venv/bin/python")
+    if not venv_py:
+        raise RuntimeError(
+            f"{LTX_REPO}/.venv/bin/python não encontrado — rode `uv sync --frozen` em {LTX_REPO}"
+        )
+    runner = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ltx_runner.py")
+    if not os.path.exists(runner):
+        raise RuntimeError(f"ltx_runner.py não encontrado em {runner}")
 
-    from ltx_core.components.guiders import MultiModalGuiderParams
-    from ltx_core.model.video_vae import TilingConfig
-
-    # num_frames no formato 8k+1 exigido pelo modelo.
-    k = max(1, round((p.num_frames - 1) / 8))
-    num_frames = k * 8 + 1
-    frame_rate = 25.0
-
-    video_guider = MultiModalGuiderParams(
-        cfg_scale=p.guidance_scale, stg_scale=1.0, rescale_scale=0.7,
-        modality_scale=3.0, skip_step=0, stg_blocks=[29],
-    )
-    audio_guider = MultiModalGuiderParams(
-        cfg_scale=max(p.guidance_scale, 7.0), stg_scale=1.0, rescale_scale=0.7,
-        modality_scale=3.0, skip_step=0, stg_blocks=[29],
-    )
-
-    generator_seed = int(p.seed) if p.seed is not None else int(uuid.uuid4().int % (2**31))
-
-    kwargs = dict(
-        prompt=p.prompt,
-        negative_prompt=p.negative_prompt,
-        seed=generator_seed,
-        height=512,
-        width=768,
-        num_frames=num_frames,
-        frame_rate=frame_rate,
-        num_inference_steps=p.num_inference_steps,
-        video_guider_params=video_guider,
-        audio_guider_params=audio_guider,
-        tiling_config=TilingConfig.default(),
-    )
+    work = UPLOAD_DIR / job.id
+    work.mkdir(parents=True, exist_ok=True)
+    npz_path = work / "ltx_out.npz"
+    params_path = work / "ltx_params.json"
 
     image_path = None
     if p.image_b64:
-        from ltx_pipelines.utils.args import ImageConditioningInput
-
         image = _decode_image(p.image_b64)
-        image_path = str(UPLOAD_DIR / f"{job.id}_ref.png")
+        image_path = str(work / "ref.png")
         image.save(image_path)
-        kwargs["images"] = [ImageConditioningInput(image_path, 0, 1.0, num_frames)]
 
-    report("Gerando com LTX-2.3...", 0.05)
-    video, audio = pipe(**kwargs)
+    params = {
+        "prompt": p.prompt,
+        "negative_prompt": p.negative_prompt,
+        "num_frames": p.num_frames,
+        "num_inference_steps": p.num_inference_steps,
+        "guidance_scale": p.guidance_scale,
+        "seed": p.seed,
+        "image_path": image_path,
+        "checkpoint": LTX_CHECKPOINT,
+        "upsampler": LTX_UPSAMPLER,
+        "gemma": LTX_GEMMA_DIR,
+        "out_npz": str(npz_path),
+    }
+    params_path.write_text(json.dumps(params), encoding="utf-8")
+
+    report("Carregando LTX-2.3 (processo isolado)...", 0.05)
+
+    tail: list[str] = []
+
+    def on_line(line: str):
+        low = line.lower()
+        job.stage = line[-100:]
+        if "gerando" in low or "denois" in low or "step" in low or "sampling" in low:
+            job.progress = max(job.progress, 0.5)
+        tail.append(line)
+        del tail[:-40]
+        print(f"[ltx {job.id}] {line}")
+
+    LTX_STATUS.running = True
+    LTX_STATUS.last_error = None
+    try:
+        rc = _run_stream([venv_py[0], runner, str(params_path)], cwd=LTX_REPO, on_line=on_line)
+        if rc != 0:
+            LTX_STATUS.last_error = "\n".join(tail)[-1000:]
+            raise RuntimeError(
+                f"ltx_runner terminou com código {rc} — veja o log acima para o traceback."
+            )
+        if not npz_path.exists():
+            LTX_STATUS.last_error = "\n".join(tail)[-1000:]
+            raise RuntimeError("ltx_runner terminou sem produzir o arquivo de saída (.npz).")
+    finally:
+        LTX_STATUS.running = False
+
     report("Codificando vídeo...", 0.95)
+    data = np.load(npz_path)
+    video = data["video"]
+    audio = data["audio"] if "audio" in data.files and data["audio"].size else None
+    frame_rate = float(data["fps"]) if "fps" in data.files else 25.0
 
     out_path = OUTPUT_DIR / f"{job.id}.mp4"
     _save_video_av(video, audio, out_path, frame_rate)
     job.output_path = out_path
     job.fps = int(frame_rate)
-    job.total_frames = num_frames
+    job.total_frames = int(video.shape[0])
 
 
 def _save_video_av(video, audio, path: Path, fps: float):
@@ -983,9 +975,9 @@ def health():
         "load_error": (RUNTIME.load_error or "")[-1000:] or None,
         "distill_available": RUNTIME.distill_available,
         "checkpoint_dir": CHECKPOINT_DIR,
-        "ltx_loaded": LTX_RUNTIME.pipe is not None,
-        "ltx_loading": LTX_RUNTIME.loading,
-        "ltx_load_error": (LTX_RUNTIME.load_error or "")[-1000:] or None,
+        "ltx_ready": LTX_STATUS.ready(),
+        "ltx_running": LTX_STATUS.running,
+        "ltx_load_error": (LTX_STATUS.last_error or "")[-1000:] or None,
         "avatar_supported": True,
         "avatar_ready": _avatar_ready["weights"],
         "queue_size": len(JOB_QUEUE),

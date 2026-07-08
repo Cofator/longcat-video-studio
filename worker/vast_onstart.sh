@@ -27,7 +27,19 @@ if [ ! -d /workspace/LongCat-Video ]; then
   git clone https://github.com/meituan-longcat/LongCat-Video.git /workspace/LongCat-Video
 fi
 cd /workspace/LongCat-Video
-pip install -r requirements.txt
+# O requirements.txt do LongCat causa DOIS problemas graves; removemos as linhas
+# ofensivas e instalamos o resto:
+#  1. flash-attn==2.7.4.post1 — sem wheel pré-compilada p/ torch2.8/cu128/py311,
+#     cai numa compilação from-source de 45-90+ min. Trabalho 100% desperdiçado:
+#     o passo mais abaixo reinstala à força a wheel correta (FA_VER) por cima.
+#  2. torch==2.6.0 (linha 1) — REBAIXA o torch 2.8.0 da imagem base para 2.6.0,
+#     que NÃO suporta Blackwell (sm_120, RTX PRO 6000) -> "torchvision::nms does
+#     not exist" / kernels ausentes. A imagem base já traz torch/vision/audio
+#     2.8.0+cu128 corretos; mantemos esses e ignoramos o pin do LongCat.
+# grep -E casa "pkg", "pkg==x", "pkg>=x" etc. sem casar nomes que só começam igual.
+STRIP='^(flash[_-]?attn|torch|torchvision|torchaudio)([^a-zA-Z0-9_.-]|$)'
+grep -viE "$STRIP" requirements.txt > requirements.nofa.txt
+pip install -r requirements.nofa.txt
 
 # Avatar (audio-driven) deps — best effort; pesos são baixados sob demanda no
 # primeiro job de avatar pelo worker.

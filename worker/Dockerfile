@@ -9,7 +9,9 @@ RUN apt-get update && apt-get install -y git ffmpeg && rm -rf /var/lib/apt/lists
 
 WORKDIR /workspace
 RUN git clone https://github.com/meituan-longcat/LongCat-Video.git /workspace/LongCat-Video \
-    && pip install --no-cache-dir -r /workspace/LongCat-Video/requirements.txt \
+    && grep -viE '^(flash[_-]?attn|torch|torchvision|torchaudio)([^a-zA-Z0-9_.-]|$)' \
+         /workspace/LongCat-Video/requirements.txt > /workspace/LongCat-Video/requirements.nofa.txt \
+    && pip install --no-cache-dir -r /workspace/LongCat-Video/requirements.nofa.txt \
     && pip uninstall -y xformers || true \
     && pip install --no-cache-dir --force-reinstall --no-deps \
        "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3.post1/flash_attn-2.8.3.post1+cu12torch2.8cxx11abiTRUE-cp311-cp311-linux_x86_64.whl" \
