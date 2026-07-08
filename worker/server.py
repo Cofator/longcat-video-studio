@@ -964,6 +964,76 @@ def reload_worker():
     return {"ok": True, "git": out[-500:], "restarting": True}
 
 
+_ltx_provision = {"running": False, "done": False, "error": None, "log": []}
+
+
+@app.post("/provision_ltx", dependencies=[Depends(check_auth)])
+def provision_ltx_start():
+    """(Re)baixa os pesos do LTX-2.3 que estiverem faltando, com os repos
+    corretos — em background, sem derrubar o worker. Idempotente: só baixa o
+    que falta. Útil para corrigir um provisionamento anterior (ex.: a variante
+    errada do Gemma, sem tokenizer.model)."""
+    if _ltx_provision["running"]:
+        return {"ok": True, "already_running": True, "log": _ltx_provision["log"][-20:]}
+
+    def log(m: str):
+        _ltx_provision["log"].append(m)
+        del _ltx_provision["log"][:-60]
+        print(f"[provision_ltx] {m}")
+
+    def work():
+        _ltx_provision.update(running=True, done=False, error=None, log=[])
+        try:
+            os.makedirs(LTX_WEIGHTS_DIR, exist_ok=True)
+            tok = os.path.join(LTX_GEMMA_DIR, "tokenizer.model")
+            if not os.path.exists(tok):
+                log("baixando gemma-3-12b-it-qat-q4_0-unquantized (variante correta)...")
+                if os.path.isdir(LTX_GEMMA_DIR):
+                    shutil.rmtree(LTX_GEMMA_DIR, ignore_errors=True)
+                rc = _run_stream(
+                    ["huggingface-cli", "download",
+                     "google/gemma-3-12b-it-qat-q4_0-unquantized",
+                     "--local-dir", LTX_GEMMA_DIR],
+                    cwd="/workspace", on_line=lambda l: log(l[-80:]),
+                )
+                if rc != 0:
+                    raise RuntimeError(f"download do gemma terminou com código {rc}")
+            if not os.path.exists(LTX_CHECKPOINT):
+                log("baixando checkpoint fp8...")
+                _run_stream(
+                    ["huggingface-cli", "download", "Lightricks/LTX-2.3-fp8",
+                     "ltx-2.3-22b-distilled-fp8.safetensors", "--local-dir", LTX_WEIGHTS_DIR],
+                    cwd="/workspace", on_line=lambda l: log(l[-80:]),
+                )
+            if not os.path.exists(LTX_UPSAMPLER):
+                log("baixando spatial upscaler...")
+                _run_stream(
+                    ["huggingface-cli", "download", "Lightricks/LTX-2.3",
+                     "ltx-2.3-spatial-upscaler-x2-1.1.safetensors", "--local-dir", LTX_WEIGHTS_DIR],
+                    cwd="/workspace", on_line=lambda l: log(l[-80:]),
+                )
+            _ltx_provision["done"] = True
+            log("provisionamento do LTX concluído.")
+        except Exception as exc:  # pragma: no cover
+            _ltx_provision["error"] = str(exc)
+            log(f"ERRO: {exc}")
+        finally:
+            _ltx_provision["running"] = False
+
+    threading.Thread(target=work, daemon=True).start()
+    return {"ok": True, "started": True}
+
+
+@app.get("/provision_ltx", dependencies=[Depends(check_auth)])
+def provision_ltx_status():
+    return {
+        "running": _ltx_provision["running"],
+        "done": _ltx_provision["done"],
+        "error": _ltx_provision["error"],
+        "log": _ltx_provision["log"][-25:],
+    }
+
+
 @app.get("/health")
 def health():
     running = [j for j in JOBS.values() if j.status == "running"]
