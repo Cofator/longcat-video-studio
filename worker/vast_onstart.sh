@@ -111,21 +111,31 @@ fi
     uv sync --frozen || echo "WARN: uv sync failed (LTX-2.3 indisponivel)"
   fi
 
+  # Download idempotente POR ARQUIVO (não por um único flag): assim, corrigir a
+  # fonte de um asset e reprovisionar baixa só o que falta.
   mkdir -p /workspace/weights/LTX-2.3
-  cd /workspace/weights/LTX-2.3
-  if [ ! -f .download_complete ]; then
-    for attempt in 1 2 3; do
-      echo "== download dos pesos LTX-2.3, tentativa $attempt =="
-      huggingface-cli download Lightricks/LTX-2.3-fp8 ltx-2.3-22b-distilled-fp8.safetensors \
-        --local-dir /workspace/weights/LTX-2.3 && \
-      huggingface-cli download Lightricks/LTX-2.3 ltx-2.3-spatial-upscaler-x2-1.1.safetensors \
-        --local-dir /workspace/weights/LTX-2.3 && \
-      huggingface-cli download google/gemma-3-12b-it --local-dir /workspace/weights/LTX-2.3/gemma-3-12b-it \
-        && { touch .download_complete; break; }
-      echo "download interrompido; retomando em 10s..."
-      sleep 10
-    done
-  fi
+  CKPT=/workspace/weights/LTX-2.3/ltx-2.3-22b-distilled-fp8.safetensors
+  UPS=/workspace/weights/LTX-2.3/ltx-2.3-spatial-upscaler-x2-1.1.safetensors
+  GEMMA_DIR=/workspace/weights/LTX-2.3/gemma-3-12b-it
+  for attempt in 1 2 3; do
+    echo "== download dos pesos LTX-2.3, tentativa $attempt =="
+    ok=1
+    [ -f "$CKPT" ] || huggingface-cli download Lightricks/LTX-2.3-fp8 ltx-2.3-22b-distilled-fp8.safetensors \
+      --local-dir /workspace/weights/LTX-2.3 || ok=0
+    [ -f "$UPS" ] || huggingface-cli download Lightricks/LTX-2.3 ltx-2.3-spatial-upscaler-x2-1.1.safetensors \
+      --local-dir /workspace/weights/LTX-2.3 || ok=0
+    # Gemma text encoder: o LTX exige a variante QAT-unquantized — ela tem o
+    # tokenizer.model (SentencePiece) que o pipeline procura e NÃO é gated. O
+    # google/gemma-3-12b-it "puro" é gated e não traz esse arquivo (FileNotFound).
+    if [ ! -f "$GEMMA_DIR/tokenizer.model" ]; then
+      rm -rf "$GEMMA_DIR"
+      huggingface-cli download google/gemma-3-12b-it-qat-q4_0-unquantized \
+        --local-dir "$GEMMA_DIR" || ok=0
+    fi
+    [ "$ok" = 1 ] && { touch /workspace/weights/LTX-2.3/.download_complete; break; }
+    echo "download incompleto; retomando em 10s..."
+    sleep 10
+  done
   echo "== LTX-2.3 provisioning done: $(date) =="
 ) &
 
