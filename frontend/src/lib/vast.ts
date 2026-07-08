@@ -112,7 +112,10 @@ export async function createInstance(
   // (No `client_id` — that's a CLI-only field and triggers `invalid_args` here.)
   return vastFetch(apiKey, "PUT", `/v0/asks/${offerId}/`, {
     image: DEFAULT_IMAGE,
-    disk: opts.disk ?? 180,
+    // 250 GB: LongCat (~30) + LTX fp8 (~11) + upscaler + Gemma-3 multimodal
+    // (~29) + dois ambientes Python (~30) + temporários de download não cabem
+    // em 180 GB. Co-hospedar os dois modelos exige ~250 GB.
+    disk: opts.disk ?? 250,
     label: WORKER_LABEL,
     runtype: "ssh",
     target_state: "running",

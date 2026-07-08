@@ -74,7 +74,7 @@ export default function GpusPage() {
           gpuNames: p.names.length ? p.names : undefined,
           minGpuRam: p.minRam,
           maxPrice,
-          minDisk: 180,
+          minDisk: 250,
           numGpus: 1,
         }),
       });
@@ -96,7 +96,7 @@ export default function GpusPage() {
       const res = await fetch("/api/vast/instances", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ offerId, disk: 180 }),
+        body: JSON.stringify({ offerId, disk: 250 }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Falha ao criar instância");
