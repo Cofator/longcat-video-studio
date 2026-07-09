@@ -17,6 +17,11 @@ interface SettingsView {
   openrouterApiKeyMasked: string;
   hasOpenrouterApiKey: boolean;
   openrouterModel: string;
+  glmApiKeyMasked: string;
+  hasGlmApiKey: boolean;
+  glmModel: string;
+  hfTokenMasked: string;
+  hasHfToken: boolean;
 }
 
 export default function SettingsPage() {
@@ -29,6 +34,9 @@ export default function SettingsPage() {
   const [longcatApiKey, setLongcatApiKey] = useState("");
   const [openrouterApiKey, setOpenrouterApiKey] = useState("");
   const [openrouterModel, setOpenrouterModel] = useState("deepseek/deepseek-chat-v3:free");
+  const [glmApiKey, setGlmApiKey] = useState("");
+  const [glmModel, setGlmModel] = useState("glm-5.2");
+  const [hfToken, setHfToken] = useState("");
   const [llmProvider, setLlmProvider] = useState<"claude" | "longcat" | "openrouter">("claude");
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
@@ -41,6 +49,7 @@ export default function SettingsPage() {
     setStudioRepo(data.studioRepo);
     setLlmProvider(data.llmProvider ?? "claude");
     if (data.openrouterModel) setOpenrouterModel(data.openrouterModel);
+    if (data.glmModel) setGlmModel(data.glmModel);
   };
 
   useEffect(() => {
@@ -51,12 +60,14 @@ export default function SettingsPage() {
     setError("");
     setSaved(false);
     try {
-      const patch: Record<string, string> = { workerUrl, studioRepo, llmProvider, openrouterModel };
+      const patch: Record<string, string> = { workerUrl, studioRepo, llmProvider, openrouterModel, glmModel };
       if (vastApiKey.trim()) patch.vastApiKey = vastApiKey.trim();
       if (workerToken.trim()) patch.workerToken = workerToken.trim();
       if (anthropicApiKey.trim()) patch.anthropicApiKey = anthropicApiKey.trim();
       if (longcatApiKey.trim()) patch.longcatApiKey = longcatApiKey.trim();
       if (openrouterApiKey.trim()) patch.openrouterApiKey = openrouterApiKey.trim();
+      if (glmApiKey.trim()) patch.glmApiKey = glmApiKey.trim();
+      if (hfToken.trim()) patch.hfToken = hfToken.trim();
       const res = await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -68,6 +79,8 @@ export default function SettingsPage() {
       setAnthropicApiKey("");
       setLongcatApiKey("");
       setOpenrouterApiKey("");
+      setGlmApiKey("");
+      setHfToken("");
       setSaved(true);
       load();
     } catch (err: any) {
@@ -159,6 +172,34 @@ export default function SettingsPage() {
         <label className="field">
           <span className="lbl">Repositório do projeto (clonado pela instância)</span>
           <input type="text" value={studioRepo} onChange={(e) => setStudioRepo(e.target.value)} />
+        </label>
+        <label className="field">
+          <span className="lbl">
+            Token do HuggingFace{" "}
+            {view?.hasHfToken && <span className="dim">(atual: {view.hfTokenMasked})</span>}
+          </span>
+          <input
+            type="password"
+            value={hfToken}
+            onChange={(e) => setHfToken(e.target.value)}
+            placeholder="hf_... — necessário para o LTX-2.3 (Gemma-3 é um repo gated)"
+          />
+          <div className="hint">
+            O LTX-2.3 usa o Gemma-3 do Google como codificador de texto, e esse modelo exige login
+            + aceite de licença no HuggingFace. Crie um token em{" "}
+            <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noreferrer">
+              huggingface.co/settings/tokens
+            </a>{" "}
+            (tipo Read) depois de aceitar a licença em{" "}
+            <a
+              href="https://huggingface.co/google/gemma-3-12b-it-qat-q4_0-unquantized"
+              target="_blank"
+              rel="noreferrer"
+            >
+              esta página
+            </a>
+            . Sem isso, apenas o LongCat-Video funciona (não é gated).
+          </div>
         </label>
       </div>
 
@@ -278,6 +319,37 @@ export default function SettingsPage() {
           O botão <b>✨ Melhorar prompt</b> nas telas de geração usa o provedor selecionado para
           expandir/traduzir sua ideia em um prompt cinematográfico.
         </div>
+      </div>
+
+      <div className="card">
+        <h3>GLM-5.2 (Z.ai)</h3>
+        <div className="alert info" style={{ marginBottom: 12 }}>
+          🧠 Modelo aberto (744B MoE, MIT) da Zhipu/Z.ai — 1M tokens de contexto, modos <b>High</b> e{" "}
+          <b>Max</b> de raciocínio, tool calling. Usado na tela <b>GLM-5.2</b>.
+        </div>
+        <label className="field">
+          <span className="lbl">
+            Chave da API {view?.hasGlmApiKey && <span className="dim">(atual: {view.glmApiKeyMasked})</span>}
+          </span>
+          <input
+            type="password"
+            value={glmApiKey}
+            onChange={(e) => setGlmApiKey(e.target.value)}
+            placeholder={view?.hasGlmApiKey ? "•••• (deixe vazio para manter)" : "cole sua chave da Z.ai"}
+          />
+          <div className="hint">
+            Crie em{" "}
+            <a href="https://z.ai/model-api" target="_blank" style={{ textDecoration: "underline" }}>
+              z.ai/model-api
+            </a>
+            . A chamada roda no servidor Next (rota <code>/api/glm/chat</code>); a chave fica em{" "}
+            <code>frontend/data/settings.json</code> (fora do git).
+          </div>
+        </label>
+        <label className="field">
+          <span className="lbl">Modelo</span>
+          <input type="text" value={glmModel} onChange={(e) => setGlmModel(e.target.value)} placeholder="glm-5.2" />
+        </label>
       </div>
 
       <div className="row" style={{ marginTop: 18 }}>

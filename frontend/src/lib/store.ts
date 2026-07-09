@@ -15,6 +15,9 @@ const DEFAULT_SETTINGS: Settings = {
   longcatApiKey: process.env.LONGCAT_API_KEY ?? "",
   openrouterApiKey: process.env.OPENROUTER_API_KEY ?? "",
   openrouterModel: process.env.OPENROUTER_MODEL ?? "deepseek/deepseek-chat-v3:free",
+  glmApiKey: process.env.GLM_API_KEY ?? "",
+  glmModel: process.env.GLM_MODEL ?? "glm-5.2",
+  hfToken: process.env.HF_TOKEN ?? "",
 };
 
 async function ensureDir() {

@@ -26,6 +26,11 @@ export async function GET() {
     openrouterApiKeyMasked: mask(s.openrouterApiKey),
     hasOpenrouterApiKey: Boolean(s.openrouterApiKey),
     openrouterModel: s.openrouterModel,
+    glmApiKeyMasked: mask(s.glmApiKey),
+    hasGlmApiKey: Boolean(s.glmApiKey),
+    glmModel: s.glmModel,
+    hfTokenMasked: mask(s.hfToken),
+    hasHfToken: Boolean(s.hfToken),
   });
 }
 
@@ -41,6 +46,9 @@ export async function PUT(req: Request) {
     "longcatApiKey",
     "openrouterApiKey",
     "openrouterModel",
+    "glmApiKey",
+    "glmModel",
+    "hfToken",
   ] as const) {
     if (typeof body[key] === "string") patch[key] = body[key].trim();
   }

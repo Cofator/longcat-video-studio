@@ -19,6 +19,7 @@ export interface Settings {
   openrouterModel: string; // ex.: meituan/longcat-2.0 ou um modelo grátis
   glmApiKey: string; // chave da API oficial da Z.ai (GLM-5.2)
   glmModel: string; // ex.: glm-5.2
+  hfToken: string; // token do HuggingFace — necessário p/ repos gated (ex.: Gemma-3, usado pelo LTX-2.3)
 }
 
 export type ModelEngine = "longcat" | "ltx2.3";

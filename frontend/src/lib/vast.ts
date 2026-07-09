@@ -98,15 +98,23 @@ export function buildOnstart(studioRepo: string, workerToken: string): string {
 export async function createInstance(
   apiKey: string,
   offerId: number,
-  opts: { studioRepo: string; workerToken: string; disk?: number }
+  opts: { studioRepo: string; workerToken: string; disk?: number; hfToken?: string }
 ): Promise<{ new_contract: number }> {
   // A API espera `env` como objeto: variáveis viram "CHAVE": "valor" e o
-  // mapeamento de porta vira "-p 8000:8000": "1".
+  // mapeamento de porta vira "-p 8000:8000": "1". Variáveis aqui viram env do
+  // container Docker, herdadas por TODOS os processos (onstart.sh, worker,
+  // huggingface-cli) sem precisar de export manual no script.
   const env: Record<string, string> = {
     [`-p ${WORKER_PORT}:${WORKER_PORT}`]: "1",
     OPEN_BUTTON_PORT: String(WORKER_PORT),
   };
   if (opts.workerToken) env.WORKER_TOKEN = opts.workerToken;
+  // HF_TOKEN: necessário para repos gated do HuggingFace (ex.: Gemma-3, usado
+  // como text encoder pelo LTX-2.3). Sem isso, o download do Gemma falha com
+  // GatedRepoError logo no primeiro boot — foi exatamente o que aconteceu
+  // antes de existir este campo (o token tinha que ser colado manualmente
+  // depois, via /provision_ltx). huggingface-cli lê HF_TOKEN automaticamente.
+  if (opts.hfToken) env.HF_TOKEN = opts.hfToken;
 
   // Body aligned with the documented REST payload for PUT /asks/{id}/.
   // (No `client_id` — that's a CLI-only field and triggers `invalid_args` here.)

@@ -39,7 +39,10 @@ export async function POST(req: Request) {
     const result = await createInstance(settings.vastApiKey, offerId, {
       studioRepo: settings.studioRepo,
       workerToken: settings.workerToken,
-      disk: typeof body.disk === "number" ? body.disk : 100,
+      // 250: mesmo default do createInstance — LongCat+LTX+Gemma não cabem em
+      // discos menores. Esse fallback existia desatualizado em 100GB.
+      disk: typeof body.disk === "number" ? body.disk : 250,
+      hfToken: settings.hfToken,
     });
     return NextResponse.json(result);
   } catch (err: any) {
