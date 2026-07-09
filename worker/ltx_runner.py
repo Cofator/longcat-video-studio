@@ -115,18 +115,9 @@ def main() -> int:
         from ltx_pipelines.utils.args import ImageConditioningInput
         images = [ImageConditioningInput(params["image_path"], 0, 1.0, num_frames)]
 
-    # TilingConfig.default() usa tiles de 768px/80 frames — pensado pra
-    # resolução stage_1 (512x768). Na resolução final 1024x1536 (4x pixels),
-    # o decode do VAE ainda estourou OOM mesmo já "tiled" (94.95/94.97 GiB),
-    # porque cada tile de 768px numa imagem de 1536px vira só ~2x2 tiles: pouco
-    # ganho de memória de fato. Reduzindo o tile espacial pela metade (384px)
-    # e o temporal também (40 frames), o decode processa pedaços bem menores
-    # por vez — mais chamadas, mas cada uma com pico de memória bem menor.
-    from ltx_core.model.video_vae import SpatialTilingConfig, TemporalTilingConfig
-    tiling_config = TilingConfig(
-        spatial_config=SpatialTilingConfig(tile_size_in_pixels=384, tile_overlap_in_pixels=32),
-        temporal_config=TemporalTilingConfig(tile_size_in_frames=40, tile_overlap_in_frames=8),
-    )
+    # TilingConfig.default() (768px/80 frames) — dimensionado pra resolução
+    # stage_1 (512x768), que é o que geramos agora (ver height/width abaixo).
+    tiling_config = TilingConfig.default()
     video_chunks_number = get_video_chunks_number(num_frames, tiling_config)
 
     log(f"gerando: {num_frames} frames, {params.get('num_inference_steps', 40)} passos...")
@@ -141,12 +132,16 @@ def main() -> int:
             negative_prompt=params.get("negative_prompt", ""),
             seed=generator_seed,
             # height/width aqui são a resolução FINAL (pós-upscaling 2x do
-            # estágio 2), não a do estágio 1. Os defaults oficiais do LTX-2.3
-            # são stage_1=512x768 -> stage_2=1024x1536; estávamos passando os
-            # valores de stage_1 aqui, gerando na METADE da resolução didada
-            # — a causa da falta de nitidez mesmo já com a LoRA destilada certa.
-            height=1024,
-            width=1536,
+            # estágio 2). O default oficial stage_2 (1024x1536) é confirmado
+            # correto (constants.py do LTX-2), mas nesta GPU de 95GB ele OOM'a
+            # de forma consistente no decode do VAE (memory_efficient_decode.py)
+            # mesmo com fp8-cast no transformer e tiling agressivo (384px/40
+            # frames) — o decode em si, a essa resolução, excede o que a GPU
+            # comporta. Voltamos ao stage_1 (512x768) como resolução final
+            # definitiva: gera sem erro e a única queixa foi "um pouco soft",
+            # não um defeito grave como o grão anterior (que era falta de LoRA).
+            height=512,
+            width=768,
             num_frames=num_frames,
             frame_rate=frame_rate,
             num_inference_steps=int(params.get("num_inference_steps", 40)),
