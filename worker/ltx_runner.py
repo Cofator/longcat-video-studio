@@ -49,21 +49,23 @@ def main() -> int:
     from ltx_pipelines.ti2vid_two_stages import TI2VidTwoStagesPipeline
     from ltx_pipelines.utils.media_io import encode_video
     from ltx_pipelines.utils.quantization_factory import QuantizationKind
+    from ltx_pipelines.utils.types import OffloadMode
     from ltx_core.components.guiders import MultiModalGuiderParams
     from ltx_core.model.video_vae import TilingConfig, get_video_chunks_number
 
     # O checkpoint (ltx-2.3-22b-distilled-fp8.safetensors) tem pesos em fp8;
     # sem passar a política de quantização explicitamente, o pipeline assume
     # bf16 em toda parte e quebra na primeira matmul fp8×bf16 ("self and mat2
-    # must have the same dtype"). "fp8-cast" FAZ UPCAST dos pesos fp8 para
-    # bf16 durante o cálculo — o que anula a economia de VRAM do checkpoint
-    # (22B em fp8 ~22GB vira ~44GB em bf16) e já causou OOM mesmo em 96GB.
-    # "fp8-scaled-mm" calcula direto em fp8 (sem upcast), preservando a VRAM
-    # que o checkpoint fp8 existe justamente para economizar.
+    # must have the same dtype"). Tanto fp8-cast quanto fp8-scaled-mm ainda
+    # assim resultaram em ~95GB de VRAM usados (o esperado documentado é
+    # ~28GB com offload_mode=NONE) — a causa exata não foi isolada a tempo.
+    # offload_mode=CPU contorna o problema inteiro: mantém os pesos em RAM
+    # (a máquina tem ~184GB) e transmite camada por camada pra GPU, custando
+    # velocidade mas exigindo só ~36GB de RAM + ~5GB de VRAM.
     log("construindo política de quantização fp8-scaled-mm...")
     quantization = QuantizationKind.FP8_SCALED_MM.to_policy(checkpoint_path=params["checkpoint"])
 
-    log("carregando pipeline (checkpoint fp8 + upscaler + gemma-3)...")
+    log("carregando pipeline (offload_mode=CPU, checkpoint fp8 + upscaler + gemma-3)...")
     pipe = TI2VidTwoStagesPipeline(
         checkpoint_path=params["checkpoint"],
         distilled_lora=[],           # checkpoint já é a variante destilada
@@ -71,6 +73,7 @@ def main() -> int:
         gemma_root=params["gemma"],
         loras=[],
         quantization=quantization,
+        offload_mode=OffloadMode.CPU,
     )
 
     # num_frames no formato 8k+1 exigido pelo modelo.
