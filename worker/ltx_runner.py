@@ -48,8 +48,17 @@ def main() -> int:
     log("importando ltx_pipelines...")
     from ltx_pipelines.ti2vid_two_stages import TI2VidTwoStagesPipeline
     from ltx_pipelines.utils.media_io import encode_video
+    from ltx_pipelines.utils.quantization_factory import QuantizationKind
     from ltx_core.components.guiders import MultiModalGuiderParams
     from ltx_core.model.video_vae import TilingConfig, get_video_chunks_number
+
+    # O checkpoint (ltx-2.3-22b-distilled-fp8.safetensors) tem pesos em fp8;
+    # sem passar a política de quantização explicitamente, o pipeline assume
+    # bf16 em toda parte e quebra na primeira matmul fp8×bf16
+    # ("self and mat2 must have the same dtype"). O CLI oficial também não
+    # infere isso sozinho — precisa do --quantization fp8-cast explícito.
+    log("construindo política de quantização fp8-cast...")
+    quantization = QuantizationKind.FP8_CAST.to_policy(checkpoint_path=params["checkpoint"])
 
     log("carregando pipeline (checkpoint fp8 + upscaler + gemma-3)...")
     pipe = TI2VidTwoStagesPipeline(
@@ -58,6 +67,7 @@ def main() -> int:
         spatial_upsampler_path=params["upsampler"],
         gemma_root=params["gemma"],
         loras=[],
+        quantization=quantization,
     )
 
     # num_frames no formato 8k+1 exigido pelo modelo.
