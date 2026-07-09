@@ -115,7 +115,18 @@ def main() -> int:
         from ltx_pipelines.utils.args import ImageConditioningInput
         images = [ImageConditioningInput(params["image_path"], 0, 1.0, num_frames)]
 
-    tiling_config = TilingConfig.default()
+    # TilingConfig.default() usa tiles de 768px/80 frames — pensado pra
+    # resolução stage_1 (512x768). Na resolução final 1024x1536 (4x pixels),
+    # o decode do VAE ainda estourou OOM mesmo já "tiled" (94.95/94.97 GiB),
+    # porque cada tile de 768px numa imagem de 1536px vira só ~2x2 tiles: pouco
+    # ganho de memória de fato. Reduzindo o tile espacial pela metade (384px)
+    # e o temporal também (40 frames), o decode processa pedaços bem menores
+    # por vez — mais chamadas, mas cada uma com pico de memória bem menor.
+    from ltx_core.model.video_vae import SpatialTilingConfig, TemporalTilingConfig
+    tiling_config = TilingConfig(
+        spatial_config=SpatialTilingConfig(tile_size_in_pixels=384, tile_overlap_in_pixels=32),
+        temporal_config=TemporalTilingConfig(tile_size_in_frames=40, tile_overlap_in_frames=8),
+    )
     video_chunks_number = get_video_chunks_number(num_frames, tiling_config)
 
     log(f"gerando: {num_frames} frames, {params.get('num_inference_steps', 40)} passos...")
