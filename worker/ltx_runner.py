@@ -110,20 +110,26 @@ def main() -> int:
     video_chunks_number = get_video_chunks_number(num_frames, tiling_config)
 
     log(f"gerando: {num_frames} frames, {params.get('num_inference_steps', 40)} passos...")
-    video, audio = pipe(
-        prompt=params["prompt"],
-        negative_prompt=params.get("negative_prompt", ""),
-        seed=generator_seed,
-        height=512,
-        width=768,
-        num_frames=num_frames,
-        frame_rate=frame_rate,
-        num_inference_steps=int(params.get("num_inference_steps", 40)),
-        video_guider_params=video_guider,
-        audio_guider_params=audio_guider,
-        images=images,
-        tiling_config=tiling_config,
-    )
+    # torch.no_grad() (não inference_mode()): o streaming por camada do
+    # offload_mode=CPU cria/move tensores de peso de um jeito que colide com a
+    # marcação estrita de "inference tensor" do torch.inference_mode() —
+    # "Inference tensors cannot be saved for backward". no_grad() já bloqueia
+    # o cálculo de gradiente (suficiente pra inferência) sem essa restrição.
+    with torch.no_grad():
+        video, audio = pipe(
+            prompt=params["prompt"],
+            negative_prompt=params.get("negative_prompt", ""),
+            seed=generator_seed,
+            height=512,
+            width=768,
+            num_frames=num_frames,
+            frame_rate=frame_rate,
+            num_inference_steps=int(params.get("num_inference_steps", 40)),
+            video_guider_params=video_guider,
+            audio_guider_params=audio_guider,
+            images=images,
+            tiling_config=tiling_config,
+        )
 
     log(f"codificando mp4 em {params['out_mp4']}...")
     encode_video(
