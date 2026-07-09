@@ -336,8 +336,19 @@ class LTXStatus:
     def ready(self) -> bool:
         import glob
 
+        # Checa TODOS os artefatos que run_ltx_job realmente usa — só o
+        # checkpoint existir não é suficiente: o Gemma (encoder de texto) é um
+        # download separado (gated) que pode falhar independentemente, e
+        # antes disso ficava undetected (ltx_ready reportava true mesmo sem
+        # o tokenizer.model, causando um FileNotFoundError só na hora do job).
         has_venv = bool(glob.glob(f"{LTX_REPO}/.venv/bin/python"))
-        return has_venv and os.path.exists(LTX_CHECKPOINT)
+        has_tokenizer = os.path.exists(os.path.join(LTX_GEMMA_DIR, "tokenizer.model"))
+        return (
+            has_venv
+            and os.path.exists(LTX_CHECKPOINT)
+            and os.path.exists(LTX_UPSAMPLER)
+            and has_tokenizer
+        )
 
 
 LTX_STATUS = LTXStatus()
