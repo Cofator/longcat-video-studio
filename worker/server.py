@@ -1054,6 +1054,16 @@ def provision_ltx_start(req: ProvisionLtxReq = ProvisionLtxReq()):
                 )
                 if rc != 0:
                     raise RuntimeError(f"download do gemma terminou com código {rc}")
+            # stall_timeout bem maior aqui: estes são arquivos ÚNICOS grandes
+            # (checkpoint ~44GB, upscaler, lora), e o huggingface-cli só imprime
+            # "Downloading X" no início e "Download complete" no fim — SEM
+            # nenhuma linha de progresso intermediária (diferente do Gemma, que
+            # tem 5 shards separados, cada um gerando sua própria linha). Com o
+            # stall_timeout padrão (900s) o watchdog matava o processo no meio
+            # de um download real só porque não via output — e o código não
+            # checava o rc, então seguia em frente e reportava "concluído" com
+            # o checkpoint faltando/incompleto. Corrige as duas coisas: timeout
+            # bem mais folgado (1h) e verificação do código de saída.
             if not os.path.exists(LTX_CHECKPOINT_DEV):
                 # bf16 (não quantizado) — o checkpoint fp8 tem uma incompatibilidade
                 # real entre a política de quantização que seus tensores de escala
@@ -1061,28 +1071,37 @@ def provision_ltx_start(req: ProvisionLtxReq = ProvisionLtxReq()):
                 # necessário pra caber em 96GB de VRAM. bf16 não depende de tensor
                 # de escala nenhum, então funciona com qualquer offload_mode.
                 log("baixando checkpoint bf16 (dev, ~44GB)...")
-                _run_stream(
+                rc = _run_stream(
                     ["huggingface-cli", "download", "Lightricks/LTX-2.3",
                      "ltx-2.3-22b-dev.safetensors", "--local-dir", LTX_WEIGHTS_DIR],
                     cwd="/workspace", on_line=lambda l: log(l[-80:]), env=env,
+                    stall_timeout=3600,
                 )
+                if rc != 0:
+                    raise RuntimeError(f"download do checkpoint dev terminou com código {rc}")
             if not os.path.exists(LTX_UPSAMPLER):
                 log("baixando spatial upscaler...")
-                _run_stream(
+                rc = _run_stream(
                     ["huggingface-cli", "download", "Lightricks/LTX-2.3",
                      "ltx-2.3-spatial-upscaler-x2-1.1.safetensors", "--local-dir", LTX_WEIGHTS_DIR],
                     cwd="/workspace", on_line=lambda l: log(l[-80:]), env=env,
+                    stall_timeout=3600,
                 )
+                if rc != 0:
+                    raise RuntimeError(f"download do upscaler terminou com código {rc}")
             if not os.path.exists(LTX_DISTILLED_LORA):
                 # Obrigatória no pipeline oficial de 2 estágios — sem ela o
                 # estágio 2 (poucos passos, cronograma destilado) fica
                 # subdenoised e produz uma textura granulada visível no vídeo.
                 log("baixando LoRA destilada (necessária pro estágio 2)...")
-                _run_stream(
+                rc = _run_stream(
                     ["huggingface-cli", "download", "Lightricks/LTX-2.3",
                      "ltx-2.3-22b-distilled-lora-384-1.1.safetensors", "--local-dir", LTX_WEIGHTS_DIR],
                     cwd="/workspace", on_line=lambda l: log(l[-80:]), env=env,
+                    stall_timeout=3600,
                 )
+                if rc != 0:
+                    raise RuntimeError(f"download da lora destilada terminou com código {rc}")
             _ltx_provision["done"] = True
             log("provisionamento do LTX concluído.")
         except Exception as exc:  # pragma: no cover
