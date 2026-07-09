@@ -129,8 +129,13 @@ def main() -> int:
             prompt=params["prompt"],
             negative_prompt=params.get("negative_prompt", ""),
             seed=generator_seed,
-            height=512,
-            width=768,
+            # height/width aqui são a resolução FINAL (pós-upscaling 2x do
+            # estágio 2), não a do estágio 1. Os defaults oficiais do LTX-2.3
+            # são stage_1=512x768 -> stage_2=1024x1536; estávamos passando os
+            # valores de stage_1 aqui, gerando na METADE da resolução didada
+            # — a causa da falta de nitidez mesmo já com a LoRA destilada certa.
+            height=1024,
+            width=1536,
             num_frames=num_frames,
             frame_rate=frame_rate,
             num_inference_steps=int(params.get("num_inference_steps", 40)),
