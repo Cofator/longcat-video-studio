@@ -52,6 +52,7 @@ def main() -> int:
     from ltx_pipelines.utils.types import OffloadMode
     from ltx_core.components.guiders import MultiModalGuiderParams
     from ltx_core.model.video_vae import TilingConfig, get_video_chunks_number
+    from ltx_core.loader import LoraPathStrengthAndSDOps, LTXV_LORA_COMFY_RENAMING_MAP
 
     # Checkpoints fp8 exigem uma QuantizationPolicy — mas descobrimos uma
     # incompatibilidade real: fp8-scaled-mm (o que o checkpoint fp8 espera, via
@@ -69,10 +70,18 @@ def main() -> int:
     else:
         log("checkpoint bf16 (dev) — sem quantização, streaming direto.")
 
-    log("carregando pipeline (offload_mode=CPU, checkpoint + upscaler + gemma-3)...")
+    # Obrigatória no pipeline oficial de 2 estágios (--distilled-lora é
+    # required=True no CLI): o estágio 2 roda só ~3 passos, num cronograma de
+    # sigmas destilado que PRECISA dessa LoRA aplicada. Sem ela, o refino sai
+    # subdenoised — foi a causa da textura granulada vista no primeiro teste.
+    distilled_lora = [
+        LoraPathStrengthAndSDOps(params["distilled_lora"], 1.0, LTXV_LORA_COMFY_RENAMING_MAP)
+    ]
+
+    log("carregando pipeline (offload_mode=CPU, checkpoint + upscaler + gemma-3 + lora destilada)...")
     pipe = TI2VidTwoStagesPipeline(
         checkpoint_path=params["checkpoint"],
-        distilled_lora=[],           # checkpoint já é a variante destilada
+        distilled_lora=distilled_lora,
         spatial_upsampler_path=params["upsampler"],
         gemma_root=params["gemma"],
         loras=[],

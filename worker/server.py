@@ -75,6 +75,14 @@ LTX_CHECKPOINT_DEV = os.environ.get(
 LTX_UPSAMPLER = os.environ.get(
     "LTX_UPSAMPLER", str(Path(LTX_WEIGHTS_DIR) / "ltx-2.3-spatial-upscaler-x2-1.1.safetensors")
 )
+# LoRA destilada — o CLI oficial marca --distilled-lora como OBRIGATÓRIO no
+# pipeline de 2 estágios: o estágio 2 (refino/upscaling) roda só ~3 passos,
+# num cronograma de sigmas destilado que assume essa LoRA aplicada. Rodar sem
+# ela (como fizemos inicialmente) deixa o estágio 2 subdenoised — produz
+# exatamente a textura granulada/ruído que vimos no primeiro teste real.
+LTX_DISTILLED_LORA = os.environ.get(
+    "LTX_DISTILLED_LORA", str(Path(LTX_WEIGHTS_DIR) / "ltx-2.3-22b-distilled-lora-384-1.1.safetensors")
+)
 LTX_GEMMA_DIR = os.environ.get("LTX_GEMMA_DIR", str(Path(LTX_WEIGHTS_DIR) / "gemma-3-12b-it"))
 WORKER_TOKEN = os.environ.get("WORKER_TOKEN", "")
 OUTPUT_DIR = Path(os.environ.get("OUTPUT_DIR", "outputs")).absolute()
@@ -356,6 +364,7 @@ class LTXStatus:
             has_venv
             and os.path.exists(LTX_CHECKPOINT_DEV)
             and os.path.exists(LTX_UPSAMPLER)
+            and os.path.exists(LTX_DISTILLED_LORA)
             and has_tokenizer
         )
 
@@ -602,6 +611,7 @@ def run_ltx_job(job: Job):
         "image_path": image_path,
         "checkpoint": LTX_CHECKPOINT_DEV,
         "upsampler": LTX_UPSAMPLER,
+        "distilled_lora": LTX_DISTILLED_LORA,
         "gemma": LTX_GEMMA_DIR,
         "out_mp4": str(out_path),
     }
@@ -1059,6 +1069,16 @@ def provision_ltx_start(req: ProvisionLtxReq = ProvisionLtxReq()):
                 _run_stream(
                     ["huggingface-cli", "download", "Lightricks/LTX-2.3",
                      "ltx-2.3-spatial-upscaler-x2-1.1.safetensors", "--local-dir", LTX_WEIGHTS_DIR],
+                    cwd="/workspace", on_line=lambda l: log(l[-80:]), env=env,
+                )
+            if not os.path.exists(LTX_DISTILLED_LORA):
+                # Obrigatória no pipeline oficial de 2 estágios — sem ela o
+                # estágio 2 (poucos passos, cronograma destilado) fica
+                # subdenoised e produz uma textura granulada visível no vídeo.
+                log("baixando LoRA destilada (necessária pro estágio 2)...")
+                _run_stream(
+                    ["huggingface-cli", "download", "Lightricks/LTX-2.3",
+                     "ltx-2.3-22b-distilled-lora-384-1.1.safetensors", "--local-dir", LTX_WEIGHTS_DIR],
                     cwd="/workspace", on_line=lambda l: log(l[-80:]), env=env,
                 )
             _ltx_provision["done"] = True
