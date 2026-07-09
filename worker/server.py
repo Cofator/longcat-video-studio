@@ -636,9 +636,11 @@ def run_ltx_job(job: Job):
         # stall_timeout alto: a inferência em si não imprime nada por vários
         # minutos (sem log por step) — um timeout curto mataria uma geração
         # legítima em andamento, não só um travamento real.
+        ltx_env = dict(os.environ)
+        ltx_env["PYTORCH_ALLOC_CONF"] = "expandable_segments:True"
         rc = _run_stream(
             [venv_py[0], runner, str(params_path)], cwd=LTX_REPO, on_line=on_line,
-            stall_timeout=1800,
+            stall_timeout=1800, env=ltx_env,
         )
         if rc != 0:
             LTX_STATUS.last_error = "\n".join(tail)[-1000:]

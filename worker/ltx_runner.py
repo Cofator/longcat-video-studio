@@ -54,21 +54,21 @@ def main() -> int:
     from ltx_core.model.video_vae import TilingConfig, get_video_chunks_number
     from ltx_core.loader import LoraPathStrengthAndSDOps, LTXV_LORA_COMFY_RENAMING_MAP
 
-    # Checkpoints fp8 exigem uma QuantizationPolicy — mas descobrimos uma
-    # incompatibilidade real: fp8-scaled-mm (o que o checkpoint fp8 espera, via
-    # tensores .weight_scale) não suporta streaming por camada, e fp8-cast (que
-    # suporta streaming) espera tensores .input_scale que esse checkpoint não
-    # tem (KeyError). Por isso passamos a usar o checkpoint "dev" (bf16, não
-    # quantizado) por padrão — sem tensor de escala nenhum, não tem essa
-    # armadilha, e funciona com qualquer offload_mode. Só aplicamos quantização
-    # se o arquivo realmente for uma variante fp8 (nome do arquivo indica).
-    is_fp8 = "fp8" in params["checkpoint"].lower()
-    quantization = None
-    if is_fp8:
-        log("checkpoint fp8 detectado — construindo política fp8-cast...")
-        quantization = QuantizationKind.FP8_CAST.to_policy(checkpoint_path=params["checkpoint"])
-    else:
-        log("checkpoint bf16 (dev) — sem quantização, streaming direto.")
+    # fp8-cast é seguro em QUALQUER checkpoint, mesmo o "dev" (bf16): ele lê
+    # tensores `*_scale` do arquivo só para fold de prequant, e se não achar
+    # nenhum (caso do dev, que não tem escala nenhuma) simplesmente faz downcast
+    # naive dos Linears cobertos para fp8_e4m3fn, com upcast automático no
+    # forward (ver ltx_core/quantization/fp8_cast.py:build_policy). Isso reduz
+    # o footprint de peso residente na GPU durante o streaming por camada
+    # (offload_mode=CPU) — é justamente a política que a doc do pipeline diz
+    # ser compatível com streaming ("only bf16 and fp8_cast are currently
+    # supported"). Ativamos sempre para liberar headroom de VRAM na resolução
+    # final maior (1024x1536, 4x mais pixels que o teste anterior), que OOM'ou
+    # a 94.95/94.97 GiB sem quantização nenhuma (é fp8-SCALED-MM, não fp8-cast,
+    # que é incompatível com o checkpoint fp8 pronto — ver comentário antigo no
+    # histórico do commit).
+    log("construindo política fp8-cast (reduz peso residente em VRAM p/ streaming)...")
+    quantization = QuantizationKind.FP8_CAST.to_policy(checkpoint_path=params["checkpoint"])
 
     # Obrigatória no pipeline oficial de 2 estágios (--distilled-lora é
     # required=True no CLI): o estágio 2 roda só ~3 passos, num cronograma de
