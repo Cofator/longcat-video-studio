@@ -54,11 +54,14 @@ def main() -> int:
 
     # O checkpoint (ltx-2.3-22b-distilled-fp8.safetensors) tem pesos em fp8;
     # sem passar a política de quantização explicitamente, o pipeline assume
-    # bf16 em toda parte e quebra na primeira matmul fp8×bf16
-    # ("self and mat2 must have the same dtype"). O CLI oficial também não
-    # infere isso sozinho — precisa do --quantization fp8-cast explícito.
-    log("construindo política de quantização fp8-cast...")
-    quantization = QuantizationKind.FP8_CAST.to_policy(checkpoint_path=params["checkpoint"])
+    # bf16 em toda parte e quebra na primeira matmul fp8×bf16 ("self and mat2
+    # must have the same dtype"). "fp8-cast" FAZ UPCAST dos pesos fp8 para
+    # bf16 durante o cálculo — o que anula a economia de VRAM do checkpoint
+    # (22B em fp8 ~22GB vira ~44GB em bf16) e já causou OOM mesmo em 96GB.
+    # "fp8-scaled-mm" calcula direto em fp8 (sem upcast), preservando a VRAM
+    # que o checkpoint fp8 existe justamente para economizar.
+    log("construindo política de quantização fp8-scaled-mm...")
+    quantization = QuantizationKind.FP8_SCALED_MM.to_policy(checkpoint_path=params["checkpoint"])
 
     log("carregando pipeline (checkpoint fp8 + upscaler + gemma-3)...")
     pipe = TI2VidTwoStagesPipeline(
