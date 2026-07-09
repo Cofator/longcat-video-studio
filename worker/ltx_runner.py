@@ -54,21 +54,17 @@ def main() -> int:
     from ltx_core.model.video_vae import TilingConfig, get_video_chunks_number
     from ltx_core.loader import LoraPathStrengthAndSDOps, LTXV_LORA_COMFY_RENAMING_MAP
 
-    # fp8-cast é seguro em QUALQUER checkpoint, mesmo o "dev" (bf16): ele lê
-    # tensores `*_scale` do arquivo só para fold de prequant, e se não achar
-    # nenhum (caso do dev, que não tem escala nenhuma) simplesmente faz downcast
-    # naive dos Linears cobertos para fp8_e4m3fn, com upcast automático no
-    # forward (ver ltx_core/quantization/fp8_cast.py:build_policy). Isso reduz
-    # o footprint de peso residente na GPU durante o streaming por camada
-    # (offload_mode=CPU) — é justamente a política que a doc do pipeline diz
-    # ser compatível com streaming ("only bf16 and fp8_cast are currently
-    # supported"). Ativamos sempre para liberar headroom de VRAM na resolução
-    # final maior (1024x1536, 4x mais pixels que o teste anterior), que OOM'ou
-    # a 94.95/94.97 GiB sem quantização nenhuma (é fp8-SCALED-MM, não fp8-cast,
-    # que é incompatível com o checkpoint fp8 pronto — ver comentário antigo no
-    # histórico do commit).
-    log("construindo política fp8-cast (reduz peso residente em VRAM p/ streaming)...")
-    quantization = QuantizationKind.FP8_CAST.to_policy(checkpoint_path=params["checkpoint"])
+    # fp8-cast faz upcast pra bf16 A CADA forward (o cálculo em si roda em
+    # bf16, só o peso fica guardado em fp8) — na GPU de 95GB isso ainda assim
+    # ajudou (reduz o peso residente durante o streaming por camada), mas na
+    # H200 (143GB) o mesmo pipeline OOM'ou de novo mesmo com bem mais VRAM
+    # disponível, agora na etapa final do decode. Suspeita: as cópias
+    # transitórias de upcast do fp8-cast, somadas ao streaming por camada,
+    # geram mais picos de memória do que economizam nesse regime. Como agora
+    # sobra VRAM de sobra, voltamos a bf16 puro (sem quantização nenhuma) —
+    # foi o que funcionou sem erro no teste original em 512x768.
+    quantization = None
+    log("sem quantização (bf16 puro) — GPU com VRAM suficiente pra isso.")
 
     # Obrigatória no pipeline oficial de 2 estágios (--distilled-lora é
     # required=True no CLI): o estágio 2 roda só ~3 passos, num cronograma de
