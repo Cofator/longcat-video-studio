@@ -547,13 +547,14 @@ def run_ltx_job(job: Job):
     O LTX exige transformers>=4.52 e torch~=2.7, que CONFLITAM com o
     transformers/torch do LongCat no ambiente global. Por isso a geração roda
     num SUBPROCESSO isolado, com o python do .venv próprio do LTX (montado por
-    `uv sync`), via worker/ltx_runner.py. O runner devolve os arrays de
-    vídeo/áudio num .npz e nós codificamos o mp4 aqui (o ambiente global tem
-    torchvision). Isso evita o sombreamento de dependências entre os dois
+    `uv sync`), via worker/ltx_runner.py. O vídeo/áudio devolvidos pelo
+    pipeline são tipos específicos do pacote (Iterator[Tensor], classe Audio
+    própria) — o runner usa o `encode_video` da própria lib para gravar o mp4
+    final DIRETO dentro do .venv, em vez de tentar serializar esses tipos
+    manualmente para o ambiente global (que nem tem o pacote pra desserializar
+    de volta). Isso evita o sombreamento de dependências entre os dois
     modelos — a causa do ImportError de Gemma3 na primeira versão."""
     import glob
-
-    import numpy as np
 
     p = job.params
 
@@ -573,7 +574,7 @@ def run_ltx_job(job: Job):
 
     work = UPLOAD_DIR / job.id
     work.mkdir(parents=True, exist_ok=True)
-    npz_path = work / "ltx_out.npz"
+    out_path = OUTPUT_DIR / f"{job.id}.mp4"
     params_path = work / "ltx_params.json"
 
     image_path = None
@@ -593,7 +594,7 @@ def run_ltx_job(job: Job):
         "checkpoint": LTX_CHECKPOINT,
         "upsampler": LTX_UPSAMPLER,
         "gemma": LTX_GEMMA_DIR,
-        "out_npz": str(npz_path),
+        "out_mp4": str(out_path),
     }
     params_path.write_text(json.dumps(params), encoding="utf-8")
 
@@ -625,51 +626,16 @@ def run_ltx_job(job: Job):
             raise RuntimeError(
                 f"ltx_runner terminou com código {rc} — veja o log acima para o traceback."
             )
-        if not npz_path.exists():
+        if not out_path.exists():
             LTX_STATUS.last_error = "\n".join(tail)[-1000:]
-            raise RuntimeError("ltx_runner terminou sem produzir o arquivo de saída (.npz).")
+            raise RuntimeError("ltx_runner terminou sem produzir o arquivo de saída (.mp4).")
     finally:
         LTX_STATUS.running = False
 
-    report("Codificando vídeo...", 0.95)
-    data = np.load(npz_path)
-    video = data["video"]
-    audio = data["audio"] if "audio" in data.files and data["audio"].size else None
-    frame_rate = float(data["fps"]) if "fps" in data.files else 25.0
-
-    out_path = OUTPUT_DIR / f"{job.id}.mp4"
-    _save_video_av(video, audio, out_path, frame_rate)
     job.output_path = out_path
-    job.fps = int(frame_rate)
-    job.total_frames = int(video.shape[0])
-
-
-def _save_video_av(video, audio, path: Path, fps: float):
-    """Salva vídeo+áudio (LTX-2.3 gera os dois juntos) em mp4 com AAC."""
-    import numpy as np
-    import torch
-    from torchvision.io import write_video
-
-    if not torch.is_tensor(video):
-        video = torch.from_numpy(np.asarray(video))
-    video = video.detach().cpu().float()
-    if video.max() <= 1.5:
-        video = video * 255.0
-    video = video.clamp(0, 255).to(torch.uint8)
-
-    audio_array = None
-    if audio is not None:
-        if not torch.is_tensor(audio):
-            audio = torch.from_numpy(np.asarray(audio))
-        audio_array = audio.detach().cpu().float()
-        if audio_array.dim() == 1:
-            audio_array = audio_array.unsqueeze(0)
-        write_video(
-            str(path), video, fps=fps, video_codec="libx264", options={"crf": "18"},
-            audio_array=audio_array, audio_fps=48000, audio_codec="aac",
-        )
-    else:
-        write_video(str(path), video, fps=fps, video_codec="libx264", options={"crf": "18"})
+    job.fps = 25
+    # num_frames real (8k+1) pode diferir levemente do pedido; suficiente p/ exibição.
+    job.total_frames = p.num_frames
 
 
 # ---------------------------------------------------------------------------
