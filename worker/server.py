@@ -602,7 +602,13 @@ def run_ltx_job(job: Job):
     LTX_STATUS.running = True
     LTX_STATUS.last_error = None
     try:
-        rc = _run_stream([venv_py[0], runner, str(params_path)], cwd=LTX_REPO, on_line=on_line)
+        # stall_timeout alto: a inferência em si não imprime nada por vários
+        # minutos (sem log por step) — um timeout curto mataria uma geração
+        # legítima em andamento, não só um travamento real.
+        rc = _run_stream(
+            [venv_py[0], runner, str(params_path)], cwd=LTX_REPO, on_line=on_line,
+            stall_timeout=1800,
+        )
         if rc != 0:
             LTX_STATUS.last_error = "\n".join(tail)[-1000:]
             raise RuntimeError(
@@ -663,8 +669,21 @@ AVATAR_LOCK = threading.Lock()
 _avatar_ready = {"deps": False, "weights": False}
 
 
-def _run_stream(cmd: list[str], cwd: str, on_line, env=None) -> int:
-    """Roda um subprocesso transmitindo stdout linha a linha para on_line()."""
+def _run_stream(cmd: list[str], cwd: str, on_line, env=None, stall_timeout: float = 900) -> int:
+    """Roda um subprocesso transmitindo stdout linha a linha para on_line().
+
+    stall_timeout: mata o processo se ficar `stall_timeout` segundos SEM
+    produzir nenhuma linha nova. Isso existe porque `huggingface-cli download`
+    baixa um repo inteiro numa única chamada; se a transferência de UM arquivo
+    travar (stall de rede), o processo pendura pra sempre sem sair — e sem
+    isso, quem chama _run_stream nunca recupera o controle para tentar de
+    novo. Como os downloads são resumíveis (retomam do .incomplete), matar e
+    deixar quem chamou re-tentar é seguro e não perde progresso. Detectar por
+    AUSÊNCIA de output (não por duração total) evita falso positivo em
+    arquivos grandes que legitimamente demoram vários minutos entre linhas.
+    """
+    import queue as _queue
+
     proc = subprocess.Popen(
         cmd,
         cwd=cwd,
@@ -675,12 +694,34 @@ def _run_stream(cmd: list[str], cwd: str, on_line, env=None) -> int:
         bufsize=1,
     )
     assert proc.stdout is not None
-    for line in proc.stdout:
-        line = line.rstrip()
+
+    lines: "_queue.Queue[str | None]" = _queue.Queue()
+
+    def _reader():
+        try:
+            for line in proc.stdout:
+                lines.put(line.rstrip())
+        finally:
+            lines.put(None)  # sinaliza EOF
+
+    threading.Thread(target=_reader, daemon=True).start()
+
+    stalled = False
+    while True:
+        try:
+            line = lines.get(timeout=stall_timeout)
+        except Exception:
+            stalled = True
+            on_line(f"[stall] sem output por {stall_timeout:.0f}s — encerrando processo")
+            proc.kill()
+            break
+        if line is None:  # EOF — processo terminou naturalmente
+            break
         if line:
             on_line(line)
+
     proc.wait()
-    return proc.returncode
+    return proc.returncode if not stalled else 124  # 124 = convenção de timeout (coreutils)
 
 
 def ensure_avatar_ready(report):
@@ -815,7 +856,9 @@ def run_avatar_job(job: Job):
 
     env = dict(os.environ)
     env.setdefault("PYTHONPATH", LONGCAT_REPO)
-    rc = _run_stream(cmd, cwd=LONGCAT_REPO, on_line=on_line, env=env)
+    # stall_timeout alto: geração real (torchrun), não download — fica minutos
+    # sem imprimir nada entre segmentos.
+    rc = _run_stream(cmd, cwd=LONGCAT_REPO, on_line=on_line, env=env, stall_timeout=1800)
     if rc != 0:
         raise RuntimeError(f"Script de avatar terminou com código {rc}. Veja o log acima.")
 

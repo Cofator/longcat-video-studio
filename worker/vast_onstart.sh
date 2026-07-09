@@ -23,10 +23,16 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -y && apt-get install -y git ffmpeg wget || true
 
 # ---- 1. LongCat-Video (model code) ----------------------------------------
+# Fixado num commit testado (não "main"): o upstream já mudou requirements.txt
+# entre sessões (ex.: passou a pinar torch==2.6.0), quebrando silenciosamente
+# uma imagem que funcionava. Atualize LONGCAT_COMMIT deliberadamente, testando
+# antes, em vez de herdar mudanças de upstream sem aviso.
+LONGCAT_COMMIT="${LONGCAT_COMMIT:-6b3f4b8582a8}"
 if [ ! -d /workspace/LongCat-Video ]; then
   git clone https://github.com/meituan-longcat/LongCat-Video.git /workspace/LongCat-Video
 fi
 cd /workspace/LongCat-Video
+git checkout "$LONGCAT_COMMIT" 2>&1 || echo "WARN: checkout de LONGCAT_COMMIT=$LONGCAT_COMMIT falhou; usando HEAD atual"
 # O requirements.txt do LongCat causa DOIS problemas graves; removemos as linhas
 # ofensivas e instalamos o resto:
 #  1. flash-attn==2.7.4.post1 — sem wheel pré-compilada p/ torch2.8/cu128/py311,
@@ -75,15 +81,20 @@ pip install "huggingface_hub[cli]<1.0" hf_transfer
 export HF_HUB_ENABLE_HF_TRANSFER=1
 mkdir -p /workspace/weights
 if [ ! -f /workspace/weights/LongCat-Video/.download_complete ]; then
-  # Retenta: huggingface-cli retoma downloads parciais, então repetir cobre stalls.
-  for attempt in 1 2 3 4 5; do
+  # `timeout` é essencial aqui: huggingface-cli baixa o repo inteiro numa única
+  # chamada e, se a transferência de UM arquivo travar (stall de rede), o
+  # processo fica pendurado indefinidamente — o `for attempt` nunca chega a
+  # rodar de novo porque o comando nunca retorna. `timeout 900` mata a chamada
+  # após 15 min sem terminar; como o download é resumível (retoma o .incomplete),
+  # a próxima tentativa só continua de onde travou, sem perder progresso.
+  for attempt in 1 2 3 4 5 6 7 8; do
     echo "== download do modelo, tentativa $attempt =="
-    if huggingface-cli download meituan-longcat/LongCat-Video \
+    if timeout 900 huggingface-cli download meituan-longcat/LongCat-Video \
          --local-dir /workspace/weights/LongCat-Video; then
       touch /workspace/weights/LongCat-Video/.download_complete
       break
     fi
-    echo "download interrompido; retomando em 10s..."
+    echo "download interrompido ou travado (timeout 900s); retomando em 10s..."
     sleep 10
   done
 fi
@@ -97,10 +108,13 @@ fi
   set -uo pipefail
   exec >> /workspace/ltx_provision.log 2>&1
   echo "== LTX-2.3 provisioning started: $(date) =="
+  # Mesmo raciocínio do LongCat acima: fixa num commit testado, não "main".
+  LTX_COMMIT="${LTX_COMMIT:-9377758131b1}"
   if [ ! -d /workspace/LTX-2 ]; then
     git clone https://github.com/Lightricks/LTX-2.git /workspace/LTX-2
   fi
   cd /workspace/LTX-2
+  git checkout "$LTX_COMMIT" 2>&1 || echo "WARN: checkout de LTX_COMMIT=$LTX_COMMIT falhou; usando HEAD atual"
   # É um workspace uv (packages/ltx-core e packages/ltx-pipelines usam
   # `tool.uv.sources` com {workspace = true}) — "pip install -e" sozinho NÃO
   # resolve isso e falha silenciosamente (daí o ModuleNotFoundError no worker).
@@ -111,29 +125,44 @@ fi
     uv sync --frozen || echo "WARN: uv sync failed (LTX-2.3 indisponivel)"
   fi
 
+  # Checagem preventiva de espaço: o LTX (checkpoint + upscaler + Gemma-3
+  # multimodal) precisa de ~45 GB livres. Sem isso, o huggingface-cli fica
+  # martelando o disco cheio silenciosamente por dezenas de minutos até travar
+  # (foi exatamente o que aconteceu antes de trocarmos o disco padrão p/
+  # 250 GB) — melhor avisar alto e claro do que deixar travar sem explicação.
+  FREE_GB=$(df -BG --output=avail /workspace 2>/dev/null | tail -1 | tr -dc '0-9')
+  if [ -n "${FREE_GB:-}" ] && [ "$FREE_GB" -lt 45 ]; then
+    echo "AVISO: só ${FREE_GB}GB livres em /workspace (LTX precisa de ~45GB)."
+    echo "AVISO: downloads do LTX-2.3 provavelmente vão travar/estourar o disco."
+  fi
+
   # Download idempotente POR ARQUIVO (não por um único flag): assim, corrigir a
   # fonte de um asset e reprovisionar baixa só o que falta.
   mkdir -p /workspace/weights/LTX-2.3
   CKPT=/workspace/weights/LTX-2.3/ltx-2.3-22b-distilled-fp8.safetensors
   UPS=/workspace/weights/LTX-2.3/ltx-2.3-spatial-upscaler-x2-1.1.safetensors
   GEMMA_DIR=/workspace/weights/LTX-2.3/gemma-3-12b-it
-  for attempt in 1 2 3; do
+  for attempt in 1 2 3 4 5; do
     echo "== download dos pesos LTX-2.3, tentativa $attempt =="
     ok=1
-    [ -f "$CKPT" ] || huggingface-cli download Lightricks/LTX-2.3-fp8 ltx-2.3-22b-distilled-fp8.safetensors \
+    # timeout por chamada: mesmo risco de stall do download do LongCat acima.
+    [ -f "$CKPT" ] || timeout 900 huggingface-cli download Lightricks/LTX-2.3-fp8 ltx-2.3-22b-distilled-fp8.safetensors \
       --local-dir /workspace/weights/LTX-2.3 || ok=0
-    [ -f "$UPS" ] || huggingface-cli download Lightricks/LTX-2.3 ltx-2.3-spatial-upscaler-x2-1.1.safetensors \
+    [ -f "$UPS" ] || timeout 900 huggingface-cli download Lightricks/LTX-2.3 ltx-2.3-spatial-upscaler-x2-1.1.safetensors \
       --local-dir /workspace/weights/LTX-2.3 || ok=0
     # Gemma text encoder: o LTX exige a variante QAT-unquantized — ela tem o
     # tokenizer.model (SentencePiece) que o pipeline procura e NÃO é gated. O
     # google/gemma-3-12b-it "puro" é gated e não traz esse arquivo (FileNotFound).
+    # Também é GATED (precisa de HF_TOKEN de conta que aceitou a licença); sem
+    # token, falha rápido com GatedRepoError — não é um stall, então não repete
+    # à toa (ok=0 e o worker sobe mesmo assim; usar /provision_ltx com token depois).
     if [ ! -f "$GEMMA_DIR/tokenizer.model" ]; then
       rm -rf "$GEMMA_DIR"
-      huggingface-cli download google/gemma-3-12b-it-qat-q4_0-unquantized \
+      timeout 900 huggingface-cli download google/gemma-3-12b-it-qat-q4_0-unquantized \
         --local-dir "$GEMMA_DIR" || ok=0
     fi
     [ "$ok" = 1 ] && { touch /workspace/weights/LTX-2.3/.download_complete; break; }
-    echo "download incompleto; retomando em 10s..."
+    echo "download incompleto ou travado; retomando em 10s..."
     sleep 10
   done
   echo "== LTX-2.3 provisioning done: $(date) =="
