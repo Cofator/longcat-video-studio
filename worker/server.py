@@ -63,6 +63,15 @@ LTX_WEIGHTS_DIR = os.environ.get("LTX_WEIGHTS_DIR", "/workspace/weights/LTX-2.3"
 LTX_CHECKPOINT = os.environ.get(
     "LTX_CHECKPOINT", str(Path(LTX_WEIGHTS_DIR) / "ltx-2.3-22b-distilled-fp8.safetensors")
 )
+# Variante bf16 (não quantizada) — o checkpoint fp8 acima tem uma incompatibilidade
+# real entre a política de quantização exigida pelos seus tensores de escala
+# (fp8-scaled-mm) e o streaming por camada necessário pra caber em 96GB de VRAM
+# (offload_mode=CPU só suporta bf16/fp8-cast; fp8-cast espera tensores de escala
+# que este checkpoint não tem — KeyError). bf16 não precisa de tensor de escala
+# nenhum, então funciona com qualquer offload_mode sem essa armadilha.
+LTX_CHECKPOINT_DEV = os.environ.get(
+    "LTX_CHECKPOINT_DEV", str(Path(LTX_WEIGHTS_DIR) / "ltx-2.3-22b-dev.safetensors")
+)
 LTX_UPSAMPLER = os.environ.get(
     "LTX_UPSAMPLER", str(Path(LTX_WEIGHTS_DIR) / "ltx-2.3-spatial-upscaler-x2-1.1.safetensors")
 )
@@ -345,7 +354,7 @@ class LTXStatus:
         has_tokenizer = os.path.exists(os.path.join(LTX_GEMMA_DIR, "tokenizer.model"))
         return (
             has_venv
-            and os.path.exists(LTX_CHECKPOINT)
+            and os.path.exists(LTX_CHECKPOINT_DEV)
             and os.path.exists(LTX_UPSAMPLER)
             and has_tokenizer
         )
@@ -591,7 +600,7 @@ def run_ltx_job(job: Job):
         "guidance_scale": p.guidance_scale,
         "seed": p.seed,
         "image_path": image_path,
-        "checkpoint": LTX_CHECKPOINT,
+        "checkpoint": LTX_CHECKPOINT_DEV,
         "upsampler": LTX_UPSAMPLER,
         "gemma": LTX_GEMMA_DIR,
         "out_mp4": str(out_path),
@@ -1033,11 +1042,16 @@ def provision_ltx_start(req: ProvisionLtxReq = ProvisionLtxReq()):
                 )
                 if rc != 0:
                     raise RuntimeError(f"download do gemma terminou com código {rc}")
-            if not os.path.exists(LTX_CHECKPOINT):
-                log("baixando checkpoint fp8...")
+            if not os.path.exists(LTX_CHECKPOINT_DEV):
+                # bf16 (não quantizado) — o checkpoint fp8 tem uma incompatibilidade
+                # real entre a política de quantização que seus tensores de escala
+                # exigem (fp8-scaled-mm) e o streaming por camada (offload_mode=CPU)
+                # necessário pra caber em 96GB de VRAM. bf16 não depende de tensor
+                # de escala nenhum, então funciona com qualquer offload_mode.
+                log("baixando checkpoint bf16 (dev, ~44GB)...")
                 _run_stream(
-                    ["huggingface-cli", "download", "Lightricks/LTX-2.3-fp8",
-                     "ltx-2.3-22b-distilled-fp8.safetensors", "--local-dir", LTX_WEIGHTS_DIR],
+                    ["huggingface-cli", "download", "Lightricks/LTX-2.3",
+                     "ltx-2.3-22b-dev.safetensors", "--local-dir", LTX_WEIGHTS_DIR],
                     cwd="/workspace", on_line=lambda l: log(l[-80:]), env=env,
                 )
             if not os.path.exists(LTX_UPSAMPLER):

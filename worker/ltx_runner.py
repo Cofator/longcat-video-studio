@@ -53,18 +53,23 @@ def main() -> int:
     from ltx_core.components.guiders import MultiModalGuiderParams
     from ltx_core.model.video_vae import TilingConfig, get_video_chunks_number
 
-    # O checkpoint tem pesos em fp8; sem quantização explícita o pipeline
-    # assume bf16 e quebra na 1ª matmul fp8×bf16. fp8-scaled-mm (calcula
-    # direto em fp8, sem upcast) ainda assim OOMou com offload_mode=NONE (não
-    # isolamos a causa a tempo — só ~28GB era esperado, vimos ~95GB). Streaming
-    # por camada (offload_mode=CPU) SÓ é suportado com bf16 ou fp8-cast
-    # ("Block streaming is not supported with this quantization policy") — daí
-    # usarmos fp8-cast aqui: o upcast bf16 acontece UMA camada por vez (poucos
-    # MB), não no modelo inteiro de uma vez como acontecia com offload_mode=NONE.
-    log("construindo política de quantização fp8-cast (compatível com streaming)...")
-    quantization = QuantizationKind.FP8_CAST.to_policy(checkpoint_path=params["checkpoint"])
+    # Checkpoints fp8 exigem uma QuantizationPolicy — mas descobrimos uma
+    # incompatibilidade real: fp8-scaled-mm (o que o checkpoint fp8 espera, via
+    # tensores .weight_scale) não suporta streaming por camada, e fp8-cast (que
+    # suporta streaming) espera tensores .input_scale que esse checkpoint não
+    # tem (KeyError). Por isso passamos a usar o checkpoint "dev" (bf16, não
+    # quantizado) por padrão — sem tensor de escala nenhum, não tem essa
+    # armadilha, e funciona com qualquer offload_mode. Só aplicamos quantização
+    # se o arquivo realmente for uma variante fp8 (nome do arquivo indica).
+    is_fp8 = "fp8" in params["checkpoint"].lower()
+    quantization = None
+    if is_fp8:
+        log("checkpoint fp8 detectado — construindo política fp8-cast...")
+        quantization = QuantizationKind.FP8_CAST.to_policy(checkpoint_path=params["checkpoint"])
+    else:
+        log("checkpoint bf16 (dev) — sem quantização, streaming direto.")
 
-    log("carregando pipeline (offload_mode=CPU, checkpoint fp8 + upscaler + gemma-3)...")
+    log("carregando pipeline (offload_mode=CPU, checkpoint + upscaler + gemma-3)...")
     pipe = TI2VidTwoStagesPipeline(
         checkpoint_path=params["checkpoint"],
         distilled_lora=[],           # checkpoint já é a variante destilada
