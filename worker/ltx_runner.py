@@ -53,17 +53,16 @@ def main() -> int:
     from ltx_core.components.guiders import MultiModalGuiderParams
     from ltx_core.model.video_vae import TilingConfig, get_video_chunks_number
 
-    # O checkpoint (ltx-2.3-22b-distilled-fp8.safetensors) tem pesos em fp8;
-    # sem passar a política de quantização explicitamente, o pipeline assume
-    # bf16 em toda parte e quebra na primeira matmul fp8×bf16 ("self and mat2
-    # must have the same dtype"). Tanto fp8-cast quanto fp8-scaled-mm ainda
-    # assim resultaram em ~95GB de VRAM usados (o esperado documentado é
-    # ~28GB com offload_mode=NONE) — a causa exata não foi isolada a tempo.
-    # offload_mode=CPU contorna o problema inteiro: mantém os pesos em RAM
-    # (a máquina tem ~184GB) e transmite camada por camada pra GPU, custando
-    # velocidade mas exigindo só ~36GB de RAM + ~5GB de VRAM.
-    log("construindo política de quantização fp8-scaled-mm...")
-    quantization = QuantizationKind.FP8_SCALED_MM.to_policy(checkpoint_path=params["checkpoint"])
+    # O checkpoint tem pesos em fp8; sem quantização explícita o pipeline
+    # assume bf16 e quebra na 1ª matmul fp8×bf16. fp8-scaled-mm (calcula
+    # direto em fp8, sem upcast) ainda assim OOMou com offload_mode=NONE (não
+    # isolamos a causa a tempo — só ~28GB era esperado, vimos ~95GB). Streaming
+    # por camada (offload_mode=CPU) SÓ é suportado com bf16 ou fp8-cast
+    # ("Block streaming is not supported with this quantization policy") — daí
+    # usarmos fp8-cast aqui: o upcast bf16 acontece UMA camada por vez (poucos
+    # MB), não no modelo inteiro de uma vez como acontecia com offload_mode=NONE.
+    log("construindo política de quantização fp8-cast (compatível com streaming)...")
+    quantization = QuantizationKind.FP8_CAST.to_policy(checkpoint_path=params["checkpoint"])
 
     log("carregando pipeline (offload_mode=CPU, checkpoint fp8 + upscaler + gemma-3)...")
     pipe = TI2VidTwoStagesPipeline(
