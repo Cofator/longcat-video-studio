@@ -111,10 +111,15 @@ export async function createInstance(
   if (opts.workerToken) env.WORKER_TOKEN = opts.workerToken;
   // HF_TOKEN: necessário para repos gated do HuggingFace (ex.: Gemma-3, usado
   // como text encoder pelo LTX-2.3). Sem isso, o download do Gemma falha com
-  // GatedRepoError logo no primeiro boot — foi exatamente o que aconteceu
-  // antes de existir este campo (o token tinha que ser colado manualmente
-  // depois, via /provision_ltx). huggingface-cli lê HF_TOKEN automaticamente.
-  if (opts.hfToken) env.HF_TOKEN = opts.hfToken;
+  // GatedRepoError logo no primeiro boot. Setamos as DUAS variáveis: a
+  // huggingface_hub<1.0 (pinada pelo vast_onstart.sh, por exigência do
+  // transformers do LongCat) só reconhece a HUGGING_FACE_HUB_TOKEN legada —
+  // HF_TOKEN sozinha silenciosamente não autentica em versões antigas (foi
+  // exatamente por isso que o primeiro boot com só HF_TOKEN falhou gated).
+  if (opts.hfToken) {
+    env.HF_TOKEN = opts.hfToken;
+    env.HUGGING_FACE_HUB_TOKEN = opts.hfToken;
+  }
 
   // Body aligned with the documented REST payload for PUT /asks/{id}/.
   // (No `client_id` — that's a CLI-only field and triggers `invalid_args` here.)
