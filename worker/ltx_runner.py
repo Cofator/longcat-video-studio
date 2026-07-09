@@ -115,8 +115,9 @@ def main() -> int:
         from ltx_pipelines.utils.args import ImageConditioningInput
         images = [ImageConditioningInput(params["image_path"], 0, 1.0, num_frames)]
 
-    # TilingConfig.default() (768px/80 frames) — dimensionado pra resolução
-    # stage_1 (512x768), que é o que geramos agora (ver height/width abaixo).
+    # TilingConfig.default() (768px/80 frames) — ok pra 1024x1536 numa GPU com
+    # mais VRAM (H200 143GB); a versão anterior tinha reduzido isso tentando
+    # caber na RTX PRO 6000 de 95GB, que não deu certo mesmo assim.
     tiling_config = TilingConfig.default()
     video_chunks_number = get_video_chunks_number(num_frames, tiling_config)
 
@@ -132,16 +133,13 @@ def main() -> int:
             negative_prompt=params.get("negative_prompt", ""),
             seed=generator_seed,
             # height/width aqui são a resolução FINAL (pós-upscaling 2x do
-            # estágio 2). O default oficial stage_2 (1024x1536) é confirmado
-            # correto (constants.py do LTX-2), mas nesta GPU de 95GB ele OOM'a
-            # de forma consistente no decode do VAE (memory_efficient_decode.py)
-            # mesmo com fp8-cast no transformer e tiling agressivo (384px/40
-            # frames) — o decode em si, a essa resolução, excede o que a GPU
-            # comporta. Voltamos ao stage_1 (512x768) como resolução final
-            # definitiva: gera sem erro e a única queixa foi "um pouco soft",
-            # não um defeito grave como o grão anterior (que era falta de LoRA).
-            height=512,
-            width=768,
+            # estágio 2). O default oficial stage_2 (1024x1536, constants.py do
+            # LTX-2) OOM'ava de forma consistente na RTX PRO 6000 (95GB) mesmo
+            # com fp8-cast + tiling agressivo — decode do VAE sozinho já batia
+            # quase o teto da placa. Numa H200 (143GB) sobra VRAM suficiente,
+            # então voltamos à resolução final oficial.
+            height=1024,
+            width=1536,
             num_frames=num_frames,
             frame_rate=frame_rate,
             num_inference_steps=int(params.get("num_inference_steps", 40)),
