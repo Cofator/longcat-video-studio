@@ -244,6 +244,12 @@ def main():
     if med_rt > 0:
         w(f"**Vale a pena.** Sem a taxa da LI.FI, a ida+volta feita na hora deu mediana de "
           f"{med_rt:+.2f} bps (~US$ {usd_med:+.2f} por volta de {amount:,.0f}), positiva em {pos_rt:.0f}% dos ciclos.")
+    elif pos_rt < 5:
+        n_pos = sum(1 for v in rt_net if v > 0)
+        w(f"**Nao vale na pratica.** A ida+volta deu mediana de {med_rt:+.2f} bps "
+          f"(~US$ {usd_med:+.2f}) e foi positiva em apenas {n_pos} de {len(rt_net)} ciclos ({pos_rt:.1f}%), "
+          f"o que e evento isolado, nao oportunidade recorrente. "
+          f"Melhor ciclo: {max(rt_net):+.2f} bps. Confira a tabela por rota abaixo para ver de onde veio.")
     elif best and best[2] > 0 and best[1] >= 2:
         w(f"**Vale so esperando a hora certa.** Fazendo ida e volta juntas a mediana e "
           f"{med_rt:+.2f} bps (~US$ {usd_med:+.2f}), positiva em {pos_rt:.0f}% dos ciclos. "
