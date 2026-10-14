@@ -1,0 +1,114 @@
+name: LI.FI arbitrage tracker
+
+# Roda a noite toda cotando USDC(Base) <-> USDT(Polygon) na LI.FI e,
+# no fim, grava o relatorio em tools/lifi-arb-tracker/results/<data>/.
+on:
+  push:
+    branches: [claude/lifi-arbitrage-tracking-dsa7rj]
+    paths:
+      - .github/workflows/lifi-arb-tracker.yml
+      - tools/lifi-arb-tracker/*.py
+  workflow_dispatch:
+    inputs:
+      until_utc:
+        description: "Hora (UTC) para parar, HH:MM"
+        default: "10:30"
+      interval:
+        description: "Segundos entre ciclos (2 cotacoes por ciclo)"
+        default: "120"
+      amount:
+        description: "Valor por cotacao"
+        default: "2000"
+
+concurrency:
+  group: lifi-arb-tracker
+  cancel-in-progress: true
+
+env:
+  UNTIL_UTC: ${{ inputs.until_utc || '10:30' }}
+  INTERVAL: ${{ inputs.interval || '120' }}
+  AMOUNT: ${{ inputs.amount || '2000' }}
+  LIFI_API_KEY: ${{ secrets.LIFI_API_KEY }}
+
+jobs:
+  track-1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Coletar cotacoes (parte 1, ate ~5h40)
+        run: |
+          mkdir -p out
+          python tools/lifi-arb-tracker/tracker.py --out out/quotes-1.jsonl \
+            --raw-samples out/raw-samples.jsonl --amount "$AMOUNT" \
+            --interval "$INTERVAL" --until-utc "$UNTIL_UTC" --max-minutes 340
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lifi-quotes-1
+          path: out/
+          if-no-files-found: ignore
+
+  track-2:
+    needs: track-1
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Coletar cotacoes (parte 2, ate UNTIL_UTC)
+        run: |
+          mkdir -p out
+          python tools/lifi-arb-tracker/tracker.py --out out/quotes-2.jsonl \
+            --amount "$AMOUNT" --interval "$INTERVAL" \
+            --until-utc "$UNTIL_UTC" --until-today --max-minutes 340
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lifi-quotes-2
+          path: out/
+          if-no-files-found: ignore
+
+  report:
+    needs: [track-1, track-2]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: lifi-quotes-*
+          path: out
+          merge-multiple: true
+      - name: Gerar relatorio
+        run: |
+          DIR="tools/lifi-arb-tracker/results/$(TZ=America/Sao_Paulo date +%Y-%m-%d)"
+          mkdir -p "$DIR"
+          cat out/quotes-*.jsonl > "$DIR/quotes.jsonl"
+          cp out/raw-samples.jsonl "$DIR/" 2>/dev/null || true
+          python tools/lifi-arb-tracker/analyze.py "$DIR/quotes.jsonl" --out "$DIR/report.md" || true
+          cat "$DIR/report.md" >> "$GITHUB_STEP_SUMMARY"
+          echo "DIR=$DIR" >> "$GITHUB_ENV"
+      - name: Commitar resultados
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$DIR"
+          git commit -m "LI.FI arb tracker: resultados $(basename "$DIR")"
+          for i in 1 2 3 4; do
+            git pull --rebase origin "${{ github.ref_name }}" && git push origin HEAD:"${{ github.ref_name }}" && break
+            sleep $((i * 5))
+          done
