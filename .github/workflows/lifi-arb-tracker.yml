@@ -62,7 +62,7 @@ jobs:
             --raw-samples out/raw-samples.jsonl --amount "$AMOUNT" \
             --interval "$INTERVAL" --until-utc "$UNTIL_UTC" --max-minutes 340
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: ${{ !cancelled() }}
         with:
           name: lifi-quotes-1
           path: out/
@@ -70,7 +70,7 @@ jobs:
 
   track-2:
     needs: track-1
-    if: always()
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 355
     steps:
@@ -85,7 +85,7 @@ jobs:
             --amount "$AMOUNT" --interval "$INTERVAL" \
             --until-utc "$UNTIL_UTC" --until-today --max-minutes 340
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: ${{ !cancelled() }}
         with:
           name: lifi-quotes-2
           path: out/
@@ -93,7 +93,7 @@ jobs:
 
   report:
     needs: [track-1, track-2]
-    if: always()
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
