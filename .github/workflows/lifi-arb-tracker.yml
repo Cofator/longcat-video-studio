@@ -21,7 +21,7 @@ on:
         default: "2000"
 
 concurrency:
-  group: lifi-arb-tracker
+  group: lifi-arb-tracker-v2
   cancel-in-progress: true
 
 env:
@@ -111,7 +111,7 @@ jobs:
           merge-multiple: true
       - name: Gerar relatorio
         run: |
-          DIR="tools/lifi-arb-tracker/results/$(TZ=America/Sao_Paulo date +%Y-%m-%d)"
+          DIR="tools/lifi-arb-tracker/results/$(TZ=America/Sao_Paulo date +%Y-%m-%d)-run${{ github.run_number }}"
           mkdir -p "$DIR"
           cat out/quotes-*.jsonl > "$DIR/quotes.jsonl"
           cp out/raw-samples.jsonl "$DIR/" 2>/dev/null || true
