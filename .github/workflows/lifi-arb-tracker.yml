@@ -31,6 +31,22 @@ env:
   LIFI_API_KEY: ${{ secrets.LIFI_API_KEY }}
 
 jobs:
+  # Teste rapido (~3 min) so para ver no log, logo no inicio, se a API responde.
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Cotacoes de teste
+        run: |
+          python tools/lifi-arb-tracker/tracker.py --out smoke.jsonl --raw-samples raw.jsonl \
+            --amount "$AMOUNT" --interval 60 --max-minutes 3
+          python tools/lifi-arb-tracker/analyze.py smoke.jsonl --out smoke.md || true
+          head -c 4000 raw.jsonl || true
+
   track-1:
     runs-on: ubuntu-latest
     timeout-minutes: 355
