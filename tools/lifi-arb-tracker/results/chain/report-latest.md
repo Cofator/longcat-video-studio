@@ -1,38 +1,38 @@
 # Relatorio de arbitragem LI.FI: USDC_BASE <-> USDT_POLYGON
 
-Periodo: 13/10 23:30 ate 15/10 03:09 (horario de Brasilia)  
+Periodo: 13/10 23:30 ate 15/10 04:50 (horario de Brasilia)  
 Valor por cotacao: 2,000  
-Cotacoes validas: 1198 | erros: 118 | ciclos completos (ida+volta): 588
+Cotacoes validas: 1273 | erros: 125 | ciclos completos (ida+volta): 625
 
 Unidade: **bps** (1 bp = 0,01%). Em 2.000 USD, 1 bp = US$ 0,20.
 
 ## Taxa da plataforma (LI.FI/Jumper) nas cotacoes
 
-Taxa detectada em 1198/1198 cotacoes; mediana 0.250%. Nomes: `LIFI Fixed Fee` (1198).
+Taxa detectada em 1273/1273 cotacoes; mediana 0.250%. Nomes: `LIFI Fixed Fee` (1273).
 
-Todas as taxas vistas (inclui bridge/DEX, que voce paga de verdade): `LIFI Fixed Fee` (1198), `Relayer fee` (516), `Relayer gas fee` (516), `Network Gas` (282), `Execution Gas` (282), `Service Fee` (282), `Relayer Gas fee` (119), `Relayer Service fee` (119), `LayerSwap fee` (23), `NearIntents Protocol Fee` (20)
+Todas as taxas vistas (inclui bridge/DEX, que voce paga de verdade): `LIFI Fixed Fee` (1273), `Relayer fee` (553), `Relayer gas fee` (553), `Network Gas` (317), `Execution Gas` (317), `Service Fee` (317), `Relayer Gas fee` (120), `Relayer Service fee` (120), `LayerSwap fee` (25), `NearIntents Protocol Fee` (20)
 
 ## Como cotado (com a taxa)
 
 | | n | min | p10 | mediana | p90 | max | % > 0 |
 |---|---|---|---|---|---|---|---|
-| Ida USDC_BASE->USDT_POLYGON (bps) | 588 | -31.14 | -19.61 | -15.97 | -13.18 | +105.92 | 2% |
-| Volta USDT_POLYGON->USDC_BASE (bps) | 588 | -42.84 | -38.27 | -35.63 | -34.41 | +70.00 | 2% |
-| Ida, liquido de gas (bps) | 588 | -31.17 | -19.62 | -15.99 | -13.20 | +105.91 | 2% |
-| Volta, liquido de gas (bps) | 588 | -42.89 | -38.31 | -35.67 | -34.45 | +69.96 | 2% |
-| **Ida+volta simultanea** (bps) | 588 | -66.02 | -54.69 | -51.40 | -50.52 | +68.11 | 3% |
-| **Ida+volta, liquido de gas** (bps) | 588 | -66.08 | -54.78 | -51.46 | -50.58 | +68.04 | 3% |
+| Ida USDC_BASE->USDT_POLYGON (bps) | 625 | -31.14 | -19.38 | -15.88 | -13.20 | +105.92 | 2% |
+| Volta USDT_POLYGON->USDC_BASE (bps) | 625 | -42.84 | -38.09 | -35.63 | -34.44 | +70.00 | 2% |
+| Ida, liquido de gas (bps) | 625 | -31.17 | -19.40 | -15.89 | -13.24 | +105.91 | 2% |
+| Volta, liquido de gas (bps) | 625 | -42.89 | -38.13 | -35.68 | -34.48 | +69.96 | 2% |
+| **Ida+volta simultanea** (bps) | 625 | -66.02 | -54.52 | -51.41 | -50.55 | +68.11 | 2% |
+| **Ida+volta, liquido de gas** (bps) | 625 | -66.08 | -54.59 | -51.47 | -50.62 | +68.04 | 2% |
 
 ## Sem a taxa da LI.FI (o que vale na pratica)
 
 | | n | min | p10 | mediana | p90 | max | % > 0 |
 |---|---|---|---|---|---|---|---|
-| Ida USDC_BASE->USDT_POLYGON (bps) | 588 | -6.15 | +5.41 | +9.06 | +11.85 | +131.25 | 100% |
-| Volta USDT_POLYGON->USDC_BASE (bps) | 588 | -17.89 | -13.31 | -10.66 | -9.43 | +95.24 | 3% |
-| Ida, liquido de gas (bps) | 588 | -6.19 | +5.39 | +9.04 | +11.83 | +131.24 | 100% |
-| Volta, liquido de gas (bps) | 588 | -17.93 | -13.35 | -10.70 | -9.47 | +95.19 | 3% |
-| **Ida+volta simultanea** (bps) | 588 | -16.16 | -4.78 | -1.47 | -0.59 | +118.64 | 7% |
-| **Ida+volta, liquido de gas** (bps) | 588 | -16.22 | -4.86 | -1.53 | -0.65 | +118.57 | 7% |
+| Ida USDC_BASE->USDT_POLYGON (bps) | 625 | -6.15 | +5.63 | +9.15 | +11.83 | +131.25 | 100% |
+| Volta USDT_POLYGON->USDC_BASE (bps) | 625 | -17.89 | -13.12 | -10.66 | -9.46 | +95.24 | 3% |
+| Ida, liquido de gas (bps) | 625 | -6.19 | +5.61 | +9.13 | +11.79 | +131.24 | 100% |
+| Volta, liquido de gas (bps) | 625 | -17.93 | -13.16 | -10.71 | -9.50 | +95.19 | 3% |
+| **Ida+volta simultanea** (bps) | 625 | -16.16 | -4.61 | -1.48 | -0.62 | +118.64 | 7% |
+| **Ida+volta, liquido de gas** (bps) | 625 | -16.22 | -4.67 | -1.54 | -0.68 | +118.57 | 7% |
 
 ## Estrategia esperando a hora certa (sem taxa, com gas)
 
@@ -56,9 +56,9 @@ Simulacao: voce comeca com USDC. Faz a ida so quando a ida paga >= limiar; depoi
 | 0.5 | 100% | 3% |
 | 1 | 99% | 3% |
 | 2 | 98% | 3% |
-| 3 | 96% | 3% |
+| 3 | 96% | 2% |
 | 5 | 91% | 2% |
-| 10 | 36% | 2% |
+| 10 | 40% | 2% |
 
 ## Por hora (Brasilia) - mediana em bps, sem taxa, liquido de gas
 
@@ -91,19 +91,20 @@ Simulacao: voce comeca com USDC. Faz a ida so quando a ida paga >= limiar; depoi
 | 15/10 00h | 23 | +12.26 | -13.49 | -1.35 |
 | 15/10 01h | 17 | +11.30 | -12.70 | -1.41 |
 | 15/10 02h | 30 | +10.90 | -12.39 | -1.54 |
-| 15/10 03h | 4 | +10.52 | -12.30 | -1.79 |
+| 15/10 03h | 16 | +10.94 | -12.39 | -1.53 |
+| 15/10 04h | 25 | +10.69 | -12.49 | -1.88 |
 
 ## Por rota/bridge escolhida pela LI.FI (sem taxa, bps, mediana)
 
 | direcao | ferramenta | n | mediana | max | gas medio US$ | tempo medio |
 |---|---|---|---|---|---|---|
-| A2B | polymerStandard | 280 | +8.85 | +13.33 | 0.004 | 1080s |
+| A2B | polymerStandard | 315 | +9.00 | +13.33 | 0.004 | 1080s |
 | A2B | lifiIntents | 233 | +9.95 | +12.36 | 0.004 | 7s |
-| A2B | relaydepository | 59 | +3.61 | +131.25 | 0.003 | 2s |
+| A2B | relaydepository | 60 | +3.60 | +131.25 | 0.003 | 2s |
+| A2B | layerswap | 20 | +5.46 | +21.14 | 0.003 | 23s |
 | A2B | near | 19 | +5.90 | +10.58 | 0.003 | 796s |
-| A2B | layerswap | 18 | +5.40 | +21.14 | 0.003 | 25s |
 | A2B | mayan | 1 | -6.15 | -6.15 | 0.007 | 3s |
-| B2A | across | 516 | -10.56 | -8.73 | 0.009 | 4s |
+| B2A | across | 553 | -10.66 | -8.73 | 0.009 | 4s |
 | B2A | relaydepository | 60 | -13.32 | +95.24 | 0.008 | 2s |
 | B2A | lifiIntents | 6 | -11.32 | -9.65 | 0.010 | 7s |
 | B2A | layerswap | 5 | -9.10 | +2.46 | 0.010 | 18s |
@@ -111,15 +112,15 @@ Simulacao: voce comeca com USDC. Faz a ida so quando a ida paga >= limiar; depoi
 
 ## Veredito
 
-**Vale so esperando a hora certa.** Fazendo ida e volta juntas a mediana e -1.53 bps (~US$ -0.31), positiva em 7% dos ciclos. Mas executando cada perna so quando paga >= 0 bps, a simulacao fez 35 operacoes e US$ +204.36 na noite.
+**Vale so esperando a hora certa.** Fazendo ida e volta juntas a mediana e -1.54 bps (~US$ -0.31), positiva em 7% dos ciclos. Mas executando cada perna so quando paga >= 0 bps, a simulacao fez 35 operacoes e US$ +204.36 na noite.
 
 Limitacoes: sao cotacoes, nao execucoes. Slippage real, atraso entre cotar e executar e a taxa de gas do seu sistema podem mudar o resultado. O gas usado aqui e a estimativa da propria LI.FI.
 
 ## Erros
 
-- 30x `HTTP 429: {"message":"Rate limit exceeded, retry in 43 minutes","code":1005}`
-- 30x `HTTP 429: {"message":"Rate limit exceeded, retry in 37 minutes","code":1005}`
-- 30x `HTTP 429: {"message":"Rate limit exceeded, retry in 20 minutes","code":1005}`
-- 15x `HTTP 429: {"message":"Rate limit exceeded, retry in 46 minutes","code":1005}`
+- 32x `HTTP 429: {"message":"Rate limit exceeded, retry in 43 minutes","code":1005}`
+- 32x `HTTP 429: {"message":"Rate limit exceeded, retry in 37 minutes","code":1005}`
+- 32x `HTTP 429: {"message":"Rate limit exceeded, retry in 20 minutes","code":1005}`
+- 16x `HTTP 429: {"message":"Rate limit exceeded, retry in 46 minutes","code":1005}`
 - 7x `HTTP 408: {"message":"Request exceeded 30000ms processing time on GET /v1/quote/`
 - 6x `HTTP 429: {"message":"Rate limit exceeded, retry in 3 minutes","code":1005}`
