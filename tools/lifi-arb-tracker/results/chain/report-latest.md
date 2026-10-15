@@ -1,38 +1,38 @@
 # Relatorio de arbitragem LI.FI: USDC_BASE <-> USDT_POLYGON
 
-Periodo: 13/10 23:30 ate 15/10 11:32 (horario de Brasilia)  
+Periodo: 13/10 23:30 ate 15/10 13:12 (horario de Brasilia)  
 Valor por cotacao: 2,000  
-Cotacoes validas: 1575 | erros: 153 | ciclos completos (ida+volta): 774
+Cotacoes validas: 1650 | erros: 160 | ciclos completos (ida+volta): 811
 
 Unidade: **bps** (1 bp = 0,01%). Em 2.000 USD, 1 bp = US$ 0,20.
 
 ## Taxa da plataforma (LI.FI/Jumper) nas cotacoes
 
-Taxa detectada em 1575/1575 cotacoes; mediana 0.250%. Nomes: `LIFI Fixed Fee` (1575).
+Taxa detectada em 1650/1650 cotacoes; mediana 0.250%. Nomes: `LIFI Fixed Fee` (1650).
 
-Todas as taxas vistas (inclui bridge/DEX, que voce paga de verdade): `LIFI Fixed Fee` (1575), `Relayer fee` (700), `Relayer gas fee` (700), `Network Gas` (448), `Execution Gas` (448), `Service Fee` (448), `Relayer Gas fee` (127), `Relayer Service fee` (127), `LayerSwap fee` (27), `NearIntents Protocol Fee` (20)
+Todas as taxas vistas (inclui bridge/DEX, que voce paga de verdade): `LIFI Fixed Fee` (1650), `Relayer fee` (735), `Relayer gas fee` (735), `Network Gas` (483), `Execution Gas` (483), `Service Fee` (483), `Relayer Gas fee` (131), `Relayer Service fee` (131), `LayerSwap fee` (28), `NearIntents Protocol Fee` (20)
 
 ## Como cotado (com a taxa)
 
 | | n | min | p10 | mediana | p90 | max | % > 0 |
 |---|---|---|---|---|---|---|---|
-| Ida USDC_BASE->USDT_POLYGON (bps) | 774 | -31.14 | -18.66 | -15.22 | -13.28 | +105.92 | 2% |
-| Volta USDT_POLYGON->USDC_BASE (bps) | 774 | -46.42 | -38.02 | -36.53 | -34.44 | +70.00 | 1% |
-| Ida, liquido de gas (bps) | 774 | -31.17 | -18.67 | -15.24 | -13.29 | +105.91 | 2% |
-| Volta, liquido de gas (bps) | 774 | -46.46 | -38.06 | -36.57 | -34.48 | +69.96 | 1% |
-| **Ida+volta simultanea** (bps) | 774 | -66.02 | -54.25 | -51.40 | -50.65 | +68.11 | 2% |
-| **Ida+volta, liquido de gas** (bps) | 774 | -66.08 | -54.31 | -51.46 | -50.71 | +68.04 | 2% |
+| Ida USDC_BASE->USDT_POLYGON (bps) | 811 | -31.14 | -18.57 | -15.28 | -13.28 | +105.92 | 2% |
+| Volta USDT_POLYGON->USDC_BASE (bps) | 811 | -46.42 | -38.02 | -36.43 | -34.44 | +70.00 | 1% |
+| Ida, liquido de gas (bps) | 811 | -31.17 | -18.58 | -15.30 | -13.30 | +105.91 | 2% |
+| Volta, liquido de gas (bps) | 811 | -46.46 | -38.06 | -36.48 | -34.48 | +69.96 | 1% |
+| **Ida+volta simultanea** (bps) | 811 | -66.02 | -54.22 | -51.40 | -50.65 | +68.11 | 2% |
+| **Ida+volta, liquido de gas** (bps) | 811 | -66.08 | -54.27 | -51.46 | -50.71 | +68.04 | 2% |
 
 ## Sem a taxa da LI.FI (o que vale na pratica)
 
 | | n | min | p10 | mediana | p90 | max | % > 0 |
 |---|---|---|---|---|---|---|---|
-| Ida USDC_BASE->USDT_POLYGON (bps) | 774 | -6.15 | +6.36 | +9.80 | +11.75 | +131.25 | 100% |
-| Volta USDT_POLYGON->USDC_BASE (bps) | 774 | -21.47 | -13.05 | -11.55 | -9.46 | +95.24 | 2% |
-| Ida, liquido de gas (bps) | 774 | -6.19 | +6.34 | +9.79 | +11.73 | +131.24 | 100% |
-| Volta, liquido de gas (bps) | 774 | -21.52 | -13.10 | -11.60 | -9.50 | +95.19 | 2% |
-| **Ida+volta simultanea** (bps) | 774 | -16.16 | -4.33 | -1.47 | -0.72 | +118.64 | 6% |
-| **Ida+volta, liquido de gas** (bps) | 774 | -16.22 | -4.40 | -1.53 | -0.77 | +118.57 | 6% |
+| Ida USDC_BASE->USDT_POLYGON (bps) | 811 | -6.15 | +6.45 | +9.75 | +11.75 | +131.25 | 100% |
+| Volta USDT_POLYGON->USDC_BASE (bps) | 811 | -21.47 | -13.05 | -11.45 | -9.46 | +95.24 | 2% |
+| Ida, liquido de gas (bps) | 811 | -6.19 | +6.43 | +9.73 | +11.73 | +131.24 | 100% |
+| Volta, liquido de gas (bps) | 811 | -21.52 | -13.09 | -11.50 | -9.50 | +95.19 | 2% |
+| **Ida+volta simultanea** (bps) | 811 | -16.16 | -4.30 | -1.47 | -0.72 | +118.64 | 6% |
+| **Ida+volta, liquido de gas** (bps) | 811 | -16.22 | -4.36 | -1.53 | -0.78 | +118.57 | 6% |
 
 ## Estrategia esperando a hora certa (sem taxa, com gas)
 
@@ -58,7 +58,7 @@ Simulacao: voce comeca com USDC. Faz a ida so quando a ida paga >= limiar; depoi
 | 2 | 98% | 2% |
 | 3 | 96% | 2% |
 | 5 | 92% | 2% |
-| 10 | 48% | 2% |
+| 10 | 46% | 2% |
 
 ## Por hora (Brasilia) - mediana em bps, sem taxa, liquido de gas
 
@@ -99,21 +99,23 @@ Simulacao: voce comeca com USDC. Faz a ida so quando a ida paga >= limiar; depoi
 | 15/10 08h | 17 | +10.74 | -12.19 | -1.43 |
 | 15/10 09h | 25 | +10.68 | -12.29 | -1.63 |
 | 15/10 10h | 22 | +10.06 | -11.70 | -1.93 |
-| 15/10 11h | 16 | +10.22 | -11.65 | -1.45 |
+| 15/10 11h | 17 | +10.22 | -11.60 | -1.45 |
+| 15/10 12h | 30 | +9.39 | -10.71 | -1.57 |
+| 15/10 13h | 6 | +8.08 | -9.72 | -1.63 |
 
 ## Por rota/bridge escolhida pela LI.FI (sem taxa, bps, mediana)
 
 | direcao | ferramenta | n | mediana | max | gas medio US$ | tempo medio |
 |---|---|---|---|---|---|---|
-| A2B | polymerStandard | 445 | +10.14 | +52.62 | 0.004 | 1080s |
+| A2B | polymerStandard | 480 | +9.95 | +52.62 | 0.004 | 1080s |
 | A2B | lifiIntents | 249 | +10.15 | +12.36 | 0.004 | 7s |
-| A2B | relaydepository | 66 | +3.54 | +131.25 | 0.003 | 2s |
+| A2B | relaydepository | 69 | +3.52 | +131.25 | 0.003 | 2s |
 | A2B | layerswap | 21 | +5.50 | +21.14 | 0.003 | 23s |
 | A2B | near | 19 | +5.90 | +10.58 | 0.003 | 796s |
 | A2B | mayan | 1 | -6.15 | -6.15 | 0.007 | 3s |
-| B2A | across | 700 | -11.45 | -8.73 | 0.009 | 4s |
-| B2A | relaydepository | 61 | -13.31 | +95.24 | 0.008 | 2s |
-| B2A | layerswap | 6 | -12.94 | +2.46 | 0.009 | 20s |
+| B2A | across | 735 | -11.45 | -8.73 | 0.009 | 4s |
+| B2A | relaydepository | 62 | -13.31 | +95.24 | 0.008 | 2s |
+| B2A | layerswap | 7 | -9.10 | +2.46 | 0.010 | 22s |
 | B2A | lifiIntents | 6 | -11.32 | -9.65 | 0.010 | 7s |
 | B2A | near | 1 | -12.78 | -12.78 | 0.009 | 37s |
 
@@ -125,10 +127,10 @@ Limitacoes: sao cotacoes, nao execucoes. Slippage real, atraso entre cotar e exe
 
 ## Erros
 
-- 38x `HTTP 429: {"message":"Rate limit exceeded, retry in 43 minutes","code":1005}`
-- 38x `HTTP 429: {"message":"Rate limit exceeded, retry in 37 minutes","code":1005}`
-- 38x `HTTP 429: {"message":"Rate limit exceeded, retry in 20 minutes","code":1005}`
-- 19x `HTTP 429: {"message":"Rate limit exceeded, retry in 46 minutes","code":1005}`
+- 40x `HTTP 429: {"message":"Rate limit exceeded, retry in 43 minutes","code":1005}`
+- 40x `HTTP 429: {"message":"Rate limit exceeded, retry in 37 minutes","code":1005}`
+- 40x `HTTP 429: {"message":"Rate limit exceeded, retry in 20 minutes","code":1005}`
+- 20x `HTTP 429: {"message":"Rate limit exceeded, retry in 46 minutes","code":1005}`
 - 7x `HTTP 408: {"message":"Request exceeded 30000ms processing time on GET /v1/quote/`
 - 6x `HTTP 429: {"message":"Rate limit exceeded, retry in 3 minutes","code":1005}`
 - 2x `HTTP 429: {"message":"Rate limit exceeded, retry in 41 minutes","code":1005}`
