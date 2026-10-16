@@ -21,6 +21,20 @@ env:
   LIFI_API_KEY: ${{ secrets.LIFI_API_KEY }}
 
 jobs:
+  # Teste rapido (~2 min): mostra no log se a LI.FI aceita o filtro so-Relay.
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Cotacoes de teste (so Relay)
+        run: |
+          python tools/lifi-arb-tracker/relay_tracker.py --out smoke.jsonl --interval 20 --max-minutes 1.2
+          head -c 1500 smoke.jsonl
+
   window:
     runs-on: ubuntu-latest
     timeout-minutes: 130
