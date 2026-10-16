@@ -1,7 +1,7 @@
 # Relatorio da rota Relay (USDC Base <-> USDT Polygon)
 
-Periodo: 16/10 02:32 ate 16/10 03:46 (Brasilia)  
-Cotacoes validas: 75 | erros: 7 | ciclos: 38 | intervalo tipico: 120s  
+Periodo: 16/10 02:32 ate 16/10 05:37 (Brasilia)  
+Cotacoes validas: 150 | erros: 14 | ciclos: 76 | intervalo tipico: 120s  
 
 Unidade: bps (1 bp = 0,01%). Resultado liquido de gas estimado. Positivo = a ida+volta fecha acima do valor inicial.
 
@@ -9,17 +9,17 @@ Unidade: bps (1 bp = 0,01%). Resultado liquido de gas estimado. Positivo = a ida
 
 | | n | min | mediana | p90 | max | % > 0 |
 |---|---|---|---|---|---|---|
-| 2,000 ida | 37 | -15.0 | +3.5 | +3.5 | +3.6 | 97% |
-| 2,000 volta | 37 | -15.0 | -12.8 | -12.6 | -12.4 | 0% |
-| **2,000 ida+volta** | 37 | -28.0 | -9.8 | -9.4 | -9.0 | 0% |
+| 2,000 ida | 74 | -26.9 | +3.4 | +3.5 | +3.7 | 97% |
+| 2,000 volta | 74 | -15.0 | -13.0 | -12.6 | -12.4 | 0% |
+| **2,000 ida+volta** | 74 | -40.2 | -9.9 | -9.4 | -9.0 | 0% |
 
 ## Como cotado (com a taxa)
 
 | | n | min | mediana | p90 | max | % > 0 |
 |---|---|---|---|---|---|---|
-| 2,000 ida | 37 | -39.9 | -21.6 | -21.5 | -21.4 | 0% |
-| 2,000 volta | 37 | -39.9 | -37.8 | -37.6 | -37.4 | 0% |
-| **2,000 ida+volta** | 37 | -77.8 | -59.7 | -59.3 | -58.9 | 0% |
+| 2,000 ida | 74 | -51.8 | -21.6 | -21.5 | -21.3 | 0% |
+| 2,000 volta | 74 | -39.9 | -38.0 | -37.6 | -37.4 | 0% |
+| **2,000 ida+volta** | 74 | -89.9 | -59.8 | -59.3 | -58.9 | 0% |
 
 ## Janelas de oportunidade (sem taxa, liquido de gas)
 
@@ -27,7 +27,7 @@ Janela = ciclos seguidos com ida+volta positiva. A duracao tem erro de ate um in
 
 | valor | ciclos > 0 | janelas | duracao mediana | duracao maxima | melhor (bps) | melhor (US$) |
 |---|---|---|---|---|---|---|
-| 2,000 | 0/37 | 0 | 0s | 0s | -9.0 | -1.81 |
+| 2,000 | 0/74 | 0 | 0s | 0s | -9.0 | -1.81 |
 
 ## Por hora (Brasilia): % de ciclos positivos e media (sem taxa)
 
@@ -35,13 +35,15 @@ Janela = ciclos seguidos com ida+volta positiva. A duracao tem erro de ate um in
 |---|---|
 | 16/10 02h | 0% (-9.7) |
 | 16/10 03h | 0% (-10.6) |
+| 16/10 04h | 0% (-10.3) |
+| 16/10 05h | 0% (-11.9) |
 
 ## Veredito
 
-**Sem oportunidade na rota Relay** neste periodo (mediana -9.8 bps).
+**Sem oportunidade na rota Relay** neste periodo (mediana -9.9 bps).
 
 Limitacoes: sao cotacoes, nao execucoes; o preco pode nao se confirmar na execucao e o solver pode limitar volume.
 
 ## Erros
 
-- 7x `HTTP N: {"message":"Rate limit exceeded, retry in N minutes","code"`
+- 14x `HTTP N: {"message":"Rate limit exceeded, retry in N minutes","code"`
