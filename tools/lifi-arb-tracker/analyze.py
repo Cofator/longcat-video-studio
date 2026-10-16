@@ -241,10 +241,11 @@ def main():
     w("## Veredito")
     w("")
     pos_rt = sum(1 for v in rt_net if v > 0) / len(rt_net) * 100
+    best_trips = (best[1] // 2) if best and best[2] > 0 else 0
     if med_rt > 0:
         w(f"**Vale a pena.** Sem a taxa da LI.FI, a ida+volta feita na hora deu mediana de "
           f"{med_rt:+.2f} bps (~US$ {usd_med:+.2f} por volta de {amount:,.0f}), positiva em {pos_rt:.0f}% dos ciclos.")
-    elif pos_rt < 5:
+    elif pos_rt < 5 and best_trips < 5:
         n_pos = sum(1 for v in rt_net if v > 0)
         w(f"**Nao vale na pratica.** A ida+volta deu mediana de {med_rt:+.2f} bps "
           f"(~US$ {usd_med:+.2f}) e foi positiva em apenas {n_pos} de {len(rt_net)} ciclos ({pos_rt:.1f}%), "
@@ -254,7 +255,7 @@ def main():
         w(f"**Vale so esperando a hora certa.** Fazendo ida e volta juntas a mediana e "
           f"{med_rt:+.2f} bps (~US$ {usd_med:+.2f}), positiva em {pos_rt:.0f}% dos ciclos. "
           f"Mas executando cada perna so quando paga >= {best[0]:g} bps, a simulacao "
-          f"fez {best[1]} operacoes e US$ {best[2]:+.2f} na noite.")
+          f"fez {best[1]} operacoes e US$ {best[2]:+.2f} no periodo.")
     else:
         w(f"**Nao vale.** Mesmo sem a taxa da LI.FI, a ida+volta deu mediana de {med_rt:+.2f} bps "
           f"(~US$ {usd_med:+.2f}), positiva em so {pos_rt:.0f}% dos ciclos, e nenhuma estrategia "
