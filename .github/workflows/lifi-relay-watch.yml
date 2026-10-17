@@ -1,0 +1,80 @@
+name: LI.FI Relay watch (~25h, relatorio a cada 2h)
+
+# Cota so a rota Relay (relaydepository) nos dois sentidos e em varios valores.
+# 13 janelas de ~2h, uma apos a outra. Cada janela commita dados e relatorios em
+# tools/lifi-arb-tracker/results/relay/ (window-NN.md e report-latest.md).
+# Com o secret LIFI_API_KEY: intervalo de 15 s e valores 500/2000/10000.
+# Sem ele: modo lento (120 s, so 2000), porque o limite publico da LI.FI estoura.
+# Inicio: push em tools/lifi-arb-tracker/relay-start.txt (ou manual).
+on:
+  push:
+    branches: [claude/lifi-arbitrage-tracking-dsa7rj]
+    paths:
+      - tools/lifi-arb-tracker/relay-start.txt
+  workflow_dispatch:
+
+concurrency:
+  group: lifi-relay-watch
+  cancel-in-progress: true
+
+env:
+  LIFI_API_KEY: ${{ secrets.LIFI_API_KEY }}
+
+jobs:
+  # Teste rapido (~2 min): mostra no log se a LI.FI aceita o filtro so-Relay.
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Cotacoes de teste (so Relay)
+        run: |
+          python tools/lifi-arb-tracker/relay_tracker.py --out smoke.jsonl --interval 20 --max-minutes 1.2
+          head -c 1500 smoke.jsonl
+
+  window:
+    runs-on: ubuntu-latest
+    timeout-minutes: 130
+    permissions:
+      contents: write
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        slot: ["01","02","03","04","05","06","07","08","09","10","11","12","13"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Coletar cotacoes Relay (janela ${{ matrix.slot }}/13, ~2h)
+        run: |
+          D=tools/lifi-arb-tracker/results/relay
+          mkdir -p "$D"
+          python tools/lifi-arb-tracker/relay_tracker.py --out "$D/quotes-${{ matrix.slot }}.jsonl" --max-minutes 115
+      - name: Relatorios (janela e acumulado)
+        if: ${{ !cancelled() }}
+        run: |
+          D=tools/lifi-arb-tracker/results/relay
+          python tools/lifi-arb-tracker/relay_analyze.py "$D/quotes-${{ matrix.slot }}.jsonl" \
+            --out "$D/window-${{ matrix.slot }}.md" > /dev/null || true
+          python tools/lifi-arb-tracker/relay_analyze.py "$D"/quotes-*.jsonl \
+            --out "$D/report-latest.md" > /dev/null || true
+          { echo "## Janela ${{ matrix.slot }}/13"; cat "$D/window-${{ matrix.slot }}.md" 2>/dev/null;
+            echo; echo "## Acumulado"; cat "$D/report-latest.md" 2>/dev/null; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Commitar resultados
+        if: ${{ !cancelled() }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tools/lifi-arb-tracker/results/relay
+          git commit -m "LI.FI relay watch: janela ${{ matrix.slot }}/13" || exit 0
+          for i in 1 2 3 4; do
+            git pull --rebase origin "${{ github.ref_name }}" && git push origin HEAD:"${{ github.ref_name }}" && break
+            sleep $((i * 5))
+          done
